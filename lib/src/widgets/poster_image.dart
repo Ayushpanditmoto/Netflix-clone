@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import 'shimmer.dart';
+
 class PosterImage extends StatelessWidget {
   const PosterImage({
     required this.imageUrl,
@@ -31,13 +33,8 @@ class PosterImage extends StatelessWidget {
             : CachedNetworkImage(
                 imageUrl: imageUrl!,
                 fit: fit,
-                placeholder: (context, url) => const Center(
-                  child: SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
+                placeholder: (context, url) =>
+                    const Shimmer(child: ShimmerBox(borderRadius: 0)),
                 errorWidget: (context, url, error) => const Center(
                   child: Icon(
                     Icons.broken_image_outlined,

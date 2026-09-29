@@ -5,6 +5,9 @@ import '../../widgets/poster_image.dart';
 import 'player_screen.dart';
 
 void showMovieDetails(BuildContext context, Movie movie) {
+  // Reached from a poster tap, so drop the search field's focus first or the
+  // keyboard would stay up over the sheet.
+  FocusManager.instance.primaryFocus?.unfocus();
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -17,6 +20,7 @@ void showMovieDetails(BuildContext context, Movie movie) {
 }
 
 void showPlayerSheet(BuildContext context, Movie movie) {
+  FocusManager.instance.primaryFocus?.unfocus();
   Navigator.of(
     context,
   ).push(MaterialPageRoute<void>(builder: (_) => PlayerScreen(movie: movie)));
@@ -37,6 +41,7 @@ class _MovieDetailsSheet extends StatelessWidget {
       builder: (context, controller) {
         return ListView(
           controller: controller,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
           children: [
             Center(

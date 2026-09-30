@@ -1,9 +1,9 @@
-# Streamflix — Netflix Clone in Flutter
+# Netflix — Flutter Movie & Series Streaming App
 
-A Flutter movie & series streaming UI with Riverpod state management and live
-TMDB metadata.
+A Netflix-style movie & series streaming UI built with Flutter, Riverpod, and
+live TMDB metadata.
 
-![Streamflix app screens](screenshot.png)
+![Netflix app screens](screenshot.png)
 
 ## Features
 

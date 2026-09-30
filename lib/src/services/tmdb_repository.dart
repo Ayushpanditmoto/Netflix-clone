@@ -290,7 +290,7 @@ const fallbackSections = [
     ],
   ),
   MovieSection(
-    title: 'Popular on StreamFlix',
+    title: 'Popular on Netflix',
     movies: [
       Movie(
         id: 550,

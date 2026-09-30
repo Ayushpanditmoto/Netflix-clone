@@ -15,8 +15,8 @@ live TMDB metadata.
   without leaving the details screen.
 - **Search** — debounced TMDB search that pages in more results as you scroll.
 - **Trending section** — a dedicated trending view reachable from the nav bar.
-- **In-app trailer playback** — YouTube playback via `youtube_player_iframe`,
-  with a sheet player for the full-screen experience.
+- **Trailer playback** — YouTube playback via `youtube_player_iframe`, with a
+  sheet player for the full-screen experience.
 - **Shimmer skeletons** — in-house `ShaderMask` shimmer placeholders for the
   first paint, posters, and later pages. No extra package required.
 - **Offline fallback catalog** — if TMDB is unreachable, the app renders a small
@@ -136,9 +136,37 @@ lib/
 test/              repository, sections, episode list, search paging
 ```
 
+## Disclaimer
+
+This project was built **solely for learning and portfolio purposes**. It is not
+a commercial product, and I do not host, operate, or provide any streaming
+service.
+
+- **I do not host any content.** This repository contains no video files, no
+  media assets, and no proprietary content of any kind — only Dart source code,
+  which fetches metadata from the [TMDB API](https://developer.themoviedb.org/).
+- **No accounts, subscriptions, or payments** are involved.
+- **"Netflix" is a trademark of Netflix, Inc.** This is an unofficial,
+  educational clone built to demonstrate Flutter UI, state management, and API
+  integration skills. I am not affiliated with, endorsed by, or representing
+  Netflix, Inc. The name is used only to describe the UI being imitated.
+- All movie titles, artwork, and metadata belong to their respective owners and
+  are provided by TMDB. This project claims no ownership over them.
+
+### A note on the player sources
+
+`lib/src/models/player_source.dart` lists third-party embed providers. These are
+**not operated, hosted, or controlled by me**, and some may serve content without
+the rights holder's permission. I cannot vouch for their legality or their
+content. Linking to them grants this project no rights to the underlying media.
+
+If you plan to use this project beyond personal study, replace that list with
+official sources you have the right to embed.
+
+If you are a rights holder and would like a source or content removed, please
+open an issue and it will be addressed promptly.
+
 ## License
 
-Released for educational and portfolio purposes. Netflix, TMDB, and all movie
-artwork are trademarks of their respective owners. This project is not
-affiliated with or endorsed by Netflix, Inc.
+Released for educational and portfolio purposes.
 

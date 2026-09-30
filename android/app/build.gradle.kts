@@ -29,10 +29,10 @@ android {
         versionName = flutter.versionName
     }
 
+    // Signed with the debug keys so the release APK can be built and shared
+    // without extra setup. Not suitable for Google Play publishing.
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }

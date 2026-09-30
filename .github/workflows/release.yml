@@ -1,0 +1,125 @@
+name: Release
+
+# Build a signed release APK and attach it to a GitHub Release.
+# Trigger manually from the Actions tab, or by pushing a v* tag.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag to create (e.g. v1.0.0). Leave empty to build without publishing.'
+        required: false
+        type: string
+      tmdb_api_key:
+        description: 'TMDB API key baked in via --dart-define'
+        required: false
+        type: string
+      release_notes:
+        description: 'Release notes body'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Resolve version and notes
+        id: meta
+        run: |
+          TAG="${{ inputs.version }}"
+          if [ -z "$TAG" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          fi
+          {
+            echo "tag=$TAG"
+            echo "notes<<EOF_NOTES"
+            echo "${{ inputs.release_notes }}"
+            echo "EOF_NOTES"
+          } >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"
+
+      - name: Decode TMDB key
+        if: ${{ inputs.tmdb_api_key != '' }}
+        run: echo "TMDB_API_KEY=${{ inputs.tmdb_api_key }}" >> "$GITHUB_ENV"
+
+      - name: Resolve TMDB key from secrets
+        if: ${{ inputs.tmdb_api_key == '' && secrets.TMDB_API_KEY != '' }}
+        run: echo "TMDB_API_KEY=${{ secrets.TMDB_API_KEY }}" >> "$GITHUB_ENV"
+
+      - name: Fetch dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: |
+          set -e
+          if [ -n "${TMDB_API_KEY:-}" ]; then
+            flutter build apk --release --dart-define=TMDB_API_KEY="$TMDB_API_KEY"
+          else
+            flutter build apk --release
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: ${{ steps.meta.outputs.tag != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          NOTES: ${{ steps.meta.outputs.notes }}
+        run: |
+          set -e
+          if [ -n "$NOTES" ]; then
+            gh release create "$TAG" \
+              build/app/outputs/flutter-apk/app-release.apk \
+              --title "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" \
+              build/app/outputs/flutter-apk/app-release.apk \
+              --title "$TAG" --generate-notes
+          fi
+
+      - name: Summary
+        run: |
+          {
+            echo "### Release APK"
+            echo ""
+            echo "Size: $(du -h build/app/outputs/flutter-apk/app-release.apk | cut -f1)"
+            echo ""
+            echo "Tag: ${{ steps.meta.outputs.tag || 'none (build only)' }}"
+          } >> "$GITHUB_STEP_SUMMARY"

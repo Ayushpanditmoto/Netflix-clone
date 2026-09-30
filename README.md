@@ -103,15 +103,23 @@ flutter build appbundle --release --dart-define=TMDB_API_KEY=your_tmdb_key
 
 ### Signing
 
-`android/app/build.gradle.kts` currently signs release builds with the **debug
-keystore** so that `flutter run --release` works out of the box. Before
-publishing to Google Play, generate a real upload keystore and point the
-release `signingConfig` at it:
+Release builds are signed with the **debug keystore**
+(`android/app/build.gradle.kts`), so `flutter build apk --release` works with no
+extra setup. That's fine for sideloading a demo build, but it is **not** valid
+for Google Play — you'd need a real upload keystore first.
 
-```sh
-keytool -genkey -v -keystore ~/upload-keystore.jks -keyalg RSA \
-  -keysize 2048 -validity 10000 -alias upload
-```
+## Release workflow
+
+`.github/workflows/release.yml` builds the release APK and publishes it to a
+GitHub Release. Trigger it either way:
+
+- **Push a tag** — `git tag v1.0.1 && git push origin v1.0.1`
+- **Manual run** — Actions tab → *Release* → *Run workflow*, optionally filling
+  in the version, TMDB key, and release notes.
+
+The TMDB key can be supplied per-run or stored as a `TMDB_API_KEY` repository
+secret. The built APK is uploaded both as a workflow artifact and as the
+release's downloadable asset.
 
 ## Project structure
 

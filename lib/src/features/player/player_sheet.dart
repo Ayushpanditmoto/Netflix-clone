@@ -1,12 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'episode_list.dart';
 import 'youtube_trailer.dart';
 
 import '../../models/movie.dart';
-import '../../widgets/poster_image.dart';
 import 'player_screen.dart';
 import '../home/home_providers.dart';
+
+/// Season list for a series. Only ever watched for `mediaType == 'tv'`.
+final seasonsProvider = FutureProvider.autoDispose.family<List<Season>, int>((
+  ref,
+  seriesId,
+) {
+  return ref.watch(tmdbRepositoryProvider).seasons(seriesId);
+});
+
+/// Episodes of the selected season. Keyed by (seriesId, seasonNumber) so
+/// switching seasons cancels and replaces the previous request.
+final episodesProvider = FutureProvider.autoDispose
+    .family<List<Episode>, ({int seriesId, int seasonNumber})>((ref, key) {
+      return ref
+          .watch(tmdbRepositoryProvider)
+          .episodes(key.seriesId, key.seasonNumber);
+    });
 
 final trailerProvider = FutureProvider.autoDispose
     .family<String?, ({int id, String type})>((ref, title) {
@@ -28,11 +45,19 @@ void showMovieDetails(BuildContext context, Movie movie) {
   );
 }
 
-void showPlayerSheet(BuildContext context, Movie movie) {
+void showPlayerSheet(
+  BuildContext context,
+  Movie movie, {
+  int? season,
+  int? episode,
+}) {
   FocusManager.instance.primaryFocus?.unfocus();
-  Navigator.of(
-    context,
-  ).push(MaterialPageRoute<void>(builder: (_) => PlayerScreen(movie: movie)));
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) =>
+          PlayerScreen(movie: movie, season: season, episode: episode),
+    ),
+  );
 }
 
 class _MovieDetailsSheet extends StatelessWidget {
@@ -63,14 +88,7 @@ class _MovieDetailsSheet extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 18),
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: PosterImage(
-                imageUrl: movie.backdropUrl ?? movie.posterUrl,
-              ),
-            ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
             Text(
               movie.title,
               style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
@@ -90,6 +108,7 @@ class _MovieDetailsSheet extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             _TrailerPreview(movie: movie),
+            const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: () {
                 Navigator.pop(context);
@@ -98,6 +117,17 @@ class _MovieDetailsSheet extends StatelessWidget {
               icon: const Icon(Icons.play_arrow_rounded),
               label: const Text('Play'),
             ),
+            // Seasons only exist for series; a movie would 404 on the endpoint.
+            // Listed after Play so the primary action stays above the fold.
+            if (movie.mediaType == 'tv') ...[
+              const SizedBox(height: 24),
+              const Text(
+                'Episodes',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 10),
+              EpisodeList(movie: movie),
+            ],
           ],
         );
       },

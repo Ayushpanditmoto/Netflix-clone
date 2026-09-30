@@ -265,9 +265,8 @@ class _SearchResults extends ConsumerWidget {
 
     return results.when(
       loading: () => const _GridSkeleton(),
-      error: (error, stackTrace) => const _EmptyMessage(
-        message: 'Search is unavailable right now.',
-      ),
+      error: (error, stackTrace) =>
+          const _EmptyMessage(message: 'Search is unavailable right now.'),
       data: (state) {
         if (state.movies.isEmpty) {
           return const _EmptyMessage(message: 'No matching titles found.');
@@ -512,10 +511,7 @@ class _SeeAllTile extends StatelessWidget {
             children: [
               Icon(Icons.grid_view_rounded, size: 30, color: Colors.white70),
               SizedBox(height: 10),
-              Text(
-                'See all',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
+              Text('See all', style: TextStyle(fontWeight: FontWeight.w800)),
             ],
           ),
         ),

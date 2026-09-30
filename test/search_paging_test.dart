@@ -96,35 +96,36 @@ Future<void> _scrollDown(WidgetTester tester, {int times = 4}) async {
 }
 
 void main() {
-  testWidgets('loads and renders page 2 after a keystroke-by-keystroke search', (
-    tester,
-  ) async {
-    _usePhoneViewport(tester);
+  testWidgets(
+    'loads and renders page 2 after a keystroke-by-keystroke search',
+    (tester) async {
+      _usePhoneViewport(tester);
 
-    final requested = <String>[];
-    final client = MockClient((request) async {
-      if (request.url.path == '/3/search/multi') {
-        final page = request.url.queryParameters['page'] ?? '1';
-        requested.add(page);
-        return _searchPage(page);
-      }
-      return _railsPage();
-    });
+      final requested = <String>[];
+      final client = MockClient((request) async {
+        if (request.url.path == '/3/search/multi') {
+          final page = request.url.queryParameters['page'] ?? '1';
+          requested.add(page);
+          return _searchPage(page);
+        }
+        return _railsPage();
+      });
 
-    await _pumpApp(tester, client);
-    await _typeSlowly(tester, 'bat');
+      await _pumpApp(tester, client);
+      await _typeSlowly(tester, 'bat');
 
-    expect(find.text('Page 1 item 0'), findsOneWidget);
-    expect(requested.every((page) => page == '1'), isTrue);
+      expect(find.text('Page 1 item 0'), findsOneWidget);
+      expect(requested.every((page) => page == '1'), isTrue);
 
-    await _scrollDown(tester);
+      await _scrollDown(tester);
 
-    expect(requested, contains('2'));
-    // The response must actually land in the state, not just be requested.
-    expect(find.text('Page 2 item 0'), findsOneWidget);
-    expect(find.text('Load more'), findsOneWidget);
-    expect(find.text('End of results'), findsNothing);
-  });
+      expect(requested, contains('2'));
+      // The response must actually land in the state, not just be requested.
+      expect(find.text('Page 2 item 0'), findsOneWidget);
+      expect(find.text('Load more'), findsOneWidget);
+      expect(find.text('End of results'), findsNothing);
+    },
+  );
 
   testWidgets('debounces typing into a single search request', (tester) async {
     _usePhoneViewport(tester);

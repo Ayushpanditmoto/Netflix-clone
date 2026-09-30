@@ -37,6 +37,29 @@ final class TmdbRepository {
     return selected['key'] as String;
   }
 
+  /// Season list for a series, newest season last.
+  ///
+  /// Throws on failure so the UI can show a retry affordance, matching
+  /// [searchPage] rather than reporting an empty list as "no seasons".
+  Future<List<Season>> seasons(int seriesId) async {
+    final response = await _get('/tv/$seriesId');
+    return (response['seasons'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(Season.fromTmdb)
+        .toList(growable: false);
+  }
+
+  /// Episodes of one season, in broadcast order.
+  Future<List<Episode>> episodes(int seriesId, int seasonNumber) async {
+    final response = await _get('/tv/$seriesId/season/$seasonNumber');
+    return (response['episodes'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(Episode.fromTmdb)
+        .where((episode) => episode.number > 0)
+        .toList(growable: false)
+      ..sort((a, b) => a.number.compareTo(b.number));
+  }
+
   Future<List<MovieSection>> homeSections() async {
     if (apiKey.isEmpty) return fallbackSections;
 

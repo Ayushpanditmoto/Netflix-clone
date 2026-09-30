@@ -6,9 +6,21 @@ import '../../models/player_source.dart';
 import '../../widgets/poster_image.dart';
 
 class PlayerScreen extends StatefulWidget {
-  const PlayerScreen({super.key, required this.movie});
+  const PlayerScreen({
+    super.key,
+    required this.movie,
+    this.season,
+    this.episode,
+  });
 
   final Movie movie;
+
+  /// Set when the user picked a specific episode from the details sheet. Both
+  /// are null for a movie or a series opened at season level.
+  final int? season;
+  final int? episode;
+
+  bool get isEpisode => season != null && episode != null;
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -21,7 +33,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_openingSource != null) return;
     setState(() => _openingSource = source.name);
 
-    final uri = source.urlBuilder(widget.movie.id, widget.movie.mediaType);
+    final uri = source.urlFor(
+      widget.movie.id,
+      widget.movie.mediaType,
+      season: widget.season,
+      episode: widget.episode,
+    );
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
     if (!mounted) return;
@@ -96,6 +113,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     'Select a playback source',
                     style: TextStyle(color: Colors.white60),
                   ),
+                  if (widget.isEpisode)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Season ${widget.season} · Episode ${widget.episode}',
+                        style: const TextStyle(
+                          color: Color(0xFFE50914),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

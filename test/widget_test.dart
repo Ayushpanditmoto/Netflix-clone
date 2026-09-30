@@ -235,4 +235,3 @@ void main() {
     expect(tester.testTextInput.isVisible, isFalse);
   });
 }
-

@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'youtube_trailer.dart';
 
 import '../../models/movie.dart';
 import '../../widgets/poster_image.dart';
 import 'player_screen.dart';
+import '../home/home_providers.dart';
+
+final trailerProvider = FutureProvider.autoDispose
+    .family<String?, ({int id, String type})>((ref, title) {
+      return ref.watch(tmdbRepositoryProvider).trailerKey(title.id, title.type);
+    });
 
 void showMovieDetails(BuildContext context, Movie movie) {
   // Reached from a poster tap, so drop the search field's focus first or the
@@ -80,6 +89,7 @@ class _MovieDetailsSheet extends StatelessWidget {
               style: const TextStyle(height: 1.45, color: Colors.white70),
             ),
             const SizedBox(height: 20),
+            _TrailerPreview(movie: movie),
             FilledButton.icon(
               onPressed: () {
                 Navigator.pop(context);
@@ -92,5 +102,53 @@ class _MovieDetailsSheet extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _TrailerPreview extends ConsumerWidget {
+  const _TrailerPreview({required this.movie});
+  final Movie movie;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final provider = trailerProvider((id: movie.id, type: movie.mediaType));
+    return ref
+        .watch(provider)
+        .when(
+          loading: () => const Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: LinearProgressIndicator(),
+          ),
+          error: (_, stack) => TextButton.icon(
+            onPressed: () => ref.invalidate(provider),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry trailer'),
+          ),
+          data: (key) {
+            if (key == null) {
+              return const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: Text(
+                  'No trailer available',
+                  style: TextStyle(color: Colors.white54),
+                ),
+              );
+            }
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Trailer',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 10),
+                  YoutubeTrailer(key: ValueKey(key), videoId: key),
+                ],
+              ),
+            );
+          },
+        );
   }
 }

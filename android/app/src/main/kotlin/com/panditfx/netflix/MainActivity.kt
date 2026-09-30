@@ -1,4 +1,4 @@
-package com.example.netflix_clone
+package com.panditfx.netflix
 
 import io.flutter.embedding.android.FlutterActivity
 

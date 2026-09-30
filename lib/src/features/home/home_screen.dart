@@ -55,7 +55,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         titleSpacing: 16,
         title: const Text(
-          'STREAMFLIX',
+          'NETFLIX',
           style: TextStyle(
             color: Color(0xFFE50914),
             fontSize: 24,

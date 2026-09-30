@@ -40,12 +40,12 @@ http.Response _pageResponse({
 }
 
 void main() {
-  testWidgets('renders the StreamFlix home screen', (tester) async {
+  testWidgets('renders the Netflix home screen', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: NetflixCloneApp()));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.text('STREAMFLIX'), findsOneWidget);
+    expect(find.text('NETFLIX'), findsOneWidget);
     expect(find.text('Search movies and series'), findsOneWidget);
     expect(find.text('Oppenheimer'), findsOneWidget);
   });

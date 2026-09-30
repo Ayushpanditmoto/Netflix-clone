@@ -16,6 +16,27 @@ final class TmdbRepository {
   final http.Client _client;
   final String apiKey;
 
+  Future<String?> trailerKey(int id, String mediaType) async {
+    if (apiKey.isEmpty) return null;
+    final response = await _get('/$mediaType/$id/videos');
+    final trailers = (response['results'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .where(
+          (video) =>
+              video['site'] == 'YouTube' &&
+              video['type'] == 'Trailer' &&
+              video['key'] is String &&
+              RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(video['key'] as String),
+        )
+        .toList();
+    if (trailers.isEmpty) return null;
+    final selected = trailers.firstWhere(
+      (video) => video['official'] == true,
+      orElse: () => trailers.first,
+    );
+    return selected['key'] as String;
+  }
+
   Future<List<MovieSection>> homeSections() async {
     if (apiKey.isEmpty) return fallbackSections;
 
@@ -149,9 +170,8 @@ final class TmdbRepository {
       return MoviePage(
         movies: all
             .where(
-              (movie) => movie.title.toLowerCase().contains(
-                cleaned.toLowerCase(),
-              ),
+              (movie) =>
+                  movie.title.toLowerCase().contains(cleaned.toLowerCase()),
             )
             .toList(growable: false),
       );
@@ -189,10 +209,7 @@ final class TmdbRepository {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  MoviePage _moviePage(
-    Map<String, dynamic> response, {
-    String? mediaType,
-  }) {
+  MoviePage _moviePage(Map<String, dynamic> response, {String? mediaType}) {
     return MoviePage(
       movies: _movies(response, mediaType: mediaType),
       page: _currentPage(response, 1),

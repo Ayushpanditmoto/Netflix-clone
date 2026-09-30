@@ -15,7 +15,7 @@ class NetflixCloneApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'StreamFlix',
+      title: 'Netflix',
       theme: AppTheme.dark(),
       home: const HomeScreen(),
     );

@@ -17,11 +17,12 @@ class _YoutubeTrailerState extends State<YoutubeTrailer> {
     super.initState();
     _controller = YoutubePlayerController.fromVideoId(
       videoId: widget.videoId,
-      autoPlay: false,
+      autoPlay: true,
       params: const YoutubePlayerParams(
-        showControls: true,
-        showFullscreenButton: true,
-        playsInline: true,
+        showControls: false,
+        showFullscreenButton: false,
+        playsInline: false,
+        videoStateUpdateInterval: 500,
       ),
     );
   }

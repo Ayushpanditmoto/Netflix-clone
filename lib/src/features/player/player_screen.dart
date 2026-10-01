@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'embed_player_view.dart';
 import '../../models/movie.dart';
 import '../../models/player_source.dart';
 import '../../widgets/poster_image.dart';
-import 'web_player_screen.dart';
+import 'embed_player_view.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -40,17 +39,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _selected = source;
       _openingSource = source.name;
     });
-  }
-
-  /// Opens the currently selected source fullscreen.
-  Future<void> _openFullscreen(PlayerSource source) async {
-    final uri = _urlFor(source);
-    if (uri == null || !mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => WebPlayerScreen(movie: widget.movie, url: uri),
-      ),
-    );
   }
 
   Uri? _urlFor(PlayerSource source) {
@@ -113,9 +101,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       _InlinePlayer(
                         selected: _selected,
                         url: _selected == null ? null : _urlFor(_selected!),
-                        onExpand: _selected == null
-                            ? null
-                            : () => _openFullscreen(_selected!),
                       ),
                       const SizedBox(height: 26),
                       Row(
@@ -141,15 +126,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ),
                       const SizedBox(height: 10),
                       for (final source in playerSources)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _SourceTile(
-                              source: source,
-                              busy: _openingSource == source.name,
-                              selected: _selected?.name == source.name,
-                              onTap: () => _select(source),
-                            ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _SourceTile(
+                            source: source,
+                            busy: _openingSource == source.name,
+                            selected: _selected?.name == source.name,
+                            onTap: () => _select(source),
                           ),
+                        ),
                     ],
                   ),
                 ),
@@ -190,11 +175,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 /// platform WebView. Keeping several alive would leave multiple audio tracks
 /// playing and hold a lot of memory.
 class _InlinePlayer extends StatelessWidget {
-  const _InlinePlayer({required this.selected, this.url, this.onExpand});
+  const _InlinePlayer({required this.selected, this.url});
 
   final PlayerSource? selected;
   final Uri? url;
-  final VoidCallback? onExpand;
 
   @override
   Widget build(BuildContext context) {
@@ -218,15 +202,6 @@ class _InlinePlayer extends StatelessWidget {
                         EmbedPlayerView(
                           key: ValueKey('embed-${source!.name}'),
                           url: target,
-                        ),
-                        Positioned(
-                          top: 6,
-                          right: 6,
-                          child: _CircleButton(
-                            icon: Icons.open_in_full_rounded,
-                            tooltip: 'Fullscreen',
-                            onTap: onExpand,
-                          ),
                         ),
                       ],
                     ),
@@ -280,37 +255,6 @@ class _PlayerPlaceholder extends StatelessWidget {
             style: TextStyle(color: Colors.white38, fontSize: 13),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CircleButton extends StatelessWidget {
-  const _CircleButton({
-    required this.icon,
-    required this.tooltip,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.55),
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(7),
-            child: Icon(icon, size: 18, color: Colors.white),
-          ),
-        ),
       ),
     );
   }
@@ -462,81 +406,79 @@ class _SourceTile extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected
-                ? const Color(0xFFE50914)
-                : Colors.transparent,
+            color: selected ? const Color(0xFFE50914) : Colors.transparent,
             width: 1.5,
           ),
         ),
         child: Material(
           color: busy ? const Color(0xFF241012) : const Color(0xFF161616),
           borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: busy ? null : onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE50914).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: busy ? null : onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE50914).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      color: Color(0xFFE50914),
+                      size: 24,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.play_arrow_rounded,
-                    color: Color(0xFFE50914),
-                    size: 24,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          source.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          source.host,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        source.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        source.host,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white38,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: busy
+                        ? const CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFFE50914),
+                          )
+                        : const Icon(
+                            Icons.chevron_right_rounded,
+                            color: Colors.white38,
+                          ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: busy
-                      ? const CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xFFE50914),
-                        )
-                      : const Icon(
-                          Icons.chevron_right_rounded,
-                          color: Colors.white38,
-                        ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
         ),
       ),
     );

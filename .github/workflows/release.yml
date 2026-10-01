@@ -1,7 +1,7 @@
 name: Release
 
-# Build a signed release APK and attach it to a GitHub Release.
-# Trigger manually from the Actions tab, or by pushing a v* tag.
+# Build a release APK and attach it to a GitHub Release.
+# Trigger automatically by pushing a v* tag, or manually from the Actions tab.
 on:
   push:
     tags:
@@ -9,11 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release tag to create (e.g. v1.0.0). Leave empty to build without publishing.'
-        required: false
-        type: string
-      tmdb_api_key:
-        description: 'TMDB API key baked in via --dart-define'
+        description: 'Release tag to create (e.g. v1.0.2). Leave empty to build without publishing.'
         required: false
         type: string
       release_notes:
@@ -69,27 +65,13 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "tag=$TAG"
 
-      - name: Decode TMDB key
-        if: ${{ inputs.tmdb_api_key != '' }}
-        run: echo "TMDB_API_KEY=${{ inputs.tmdb_api_key }}" >> "$GITHUB_ENV"
-
-      - name: Resolve TMDB key from secrets
-        if: ${{ inputs.tmdb_api_key == '' && secrets.TMDB_API_KEY != '' }}
-        run: echo "TMDB_API_KEY=${{ secrets.TMDB_API_KEY }}" >> "$GITHUB_ENV"
-
       - name: Fetch dependencies
         run: flutter pub get
 
       - name: Build release APK
-        run: |
-          set -e
-          if [ -n "${TMDB_API_KEY:-}" ]; then
-            flutter build apk --release --dart-define=TMDB_API_KEY="$TMDB_API_KEY"
-          else
-            flutter build apk --release
-          fi
+        run: flutter build apk --release
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release

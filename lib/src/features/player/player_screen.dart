@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/movie.dart';
 import '../../models/player_source.dart';
@@ -33,6 +34,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
   /// embed with a new key, which releases the previous WebView and stops its
   /// audio before the next one starts.
   PlayerSource? _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  @override
+  void dispose() {
+    // Restore system UI when leaving the player.
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+    super.dispose();
+  }
 
   void _select(PlayerSource source) {
     setState(() {
@@ -196,14 +213,9 @@ class _InlinePlayer extends StatelessWidget {
               decoration: const BoxDecoration(color: Colors.black),
               child: target == null
                   ? const _PlayerPlaceholder()
-                  : Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        EmbedPlayerView(
-                          key: ValueKey('embed-${source!.name}'),
-                          url: target,
-                        ),
-                      ],
+                  : EmbedPlayerView(
+                      key: ValueKey('embed-${source!.name}'),
+                      url: target,
                     ),
             ),
           ),
@@ -223,6 +235,7 @@ class _InlinePlayer extends StatelessWidget {
     );
   }
 }
+
 
 class _PlayerPlaceholder extends StatelessWidget {
   const _PlayerPlaceholder();

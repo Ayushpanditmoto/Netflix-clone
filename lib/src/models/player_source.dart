@@ -42,8 +42,12 @@ final playerSources = <PlayerSource>[
   PlayerSource(
     name: 'CineSrc / NexVid',
     host: 'cinesrc.st',
+    // The /embed path is the documented player page and the one the resolver
+    // verifies against; /{type}/{id} is not a guaranteed embed route.
     urlBuilder: (id, mediaType) =>
-        Uri.parse('https://cinesrc.st/$mediaType/$id'),
+        Uri.parse('https://cinesrc.st/embed/$mediaType/$id'),
+    episodeUrlBuilder: (id, season, episode) =>
+        Uri.parse('https://cinesrc.st/embed/tv/$id?season=$season&episode=$episode'),
   ),
   PlayerSource(
     name: 'FilmU',

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import 'embed_player_view.dart';
 import '../../models/movie.dart';
 import '../../models/player_source.dart';
 import '../../widgets/poster_image.dart';
+import 'web_player_screen.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -29,132 +30,513 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   String? _openingSource;
 
-  Future<void> _openSource(PlayerSource source) async {
-    if (_openingSource != null) return;
-    setState(() => _openingSource = source.name);
+  /// Source currently loaded in the inline player. Switching this rebuilds the
+  /// embed with a new key, which releases the previous WebView and stops its
+  /// audio before the next one starts.
+  PlayerSource? _selected;
 
-    final uri = source.urlFor(
-      widget.movie.id,
-      widget.movie.mediaType,
-      season: widget.season,
-      episode: widget.episode,
+  void _select(PlayerSource source) {
+    setState(() {
+      _selected = source;
+      _openingSource = source.name;
+    });
+  }
+
+  /// Opens the currently selected source fullscreen.
+  Future<void> _openFullscreen(PlayerSource source) async {
+    final uri = _urlFor(source);
+    if (uri == null || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => WebPlayerScreen(movie: widget.movie, url: uri),
+      ),
     );
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 
-    if (!mounted) return;
-    setState(() => _openingSource = null);
-    if (!opened) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not open ${source.name}.')));
+  Uri? _urlFor(PlayerSource source) {
+    try {
+      return source.urlFor(
+        widget.movie.id,
+        widget.movie.mediaType,
+        season: widget.season,
+        episode: widget.episode,
+      );
+    } on Object {
+      return null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final previewHeight = (MediaQuery.sizeOf(context).width * 9 / 16).clamp(
-      180.0,
-      420.0,
-    );
+    final width = MediaQuery.sizeOf(context).width;
+    final heroHeight = (width * 9 / 16).clamp(200.0, 380.0);
 
     return Scaffold(
       backgroundColor: const Color(0xFF090909),
-      appBar: AppBar(title: const Text('Choose a source')),
-      body: SafeArea(
-        top: false,
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 28),
-          children: [
-            SizedBox(
-              height: previewHeight,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  PosterImage(
-                    imageUrl:
-                        widget.movie.backdropUrl ?? widget.movie.posterUrl,
-                    borderRadius: 0,
-                  ),
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Color(0xE6090909)],
-                      ),
-                    ),
-                  ),
-                  const Center(
-                    child: Icon(
-                      Icons.play_circle_fill_rounded,
-                      color: Colors.white,
-                      size: 64,
-                    ),
-                  ),
-                ],
+      body: Stack(
+        children: [
+          ListView(
+            padding: const EdgeInsets.only(bottom: 32),
+            children: [
+              _Hero(
+                height: heroHeight,
+                imageUrl: widget.movie.backdropUrl ?? widget.movie.posterUrl,
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.movie.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Select a playback source',
-                    style: TextStyle(color: Colors.white60),
-                  ),
-                  if (widget.isEpisode)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        'Season ${widget.season} · Episode ${widget.episode}',
+              Transform.translate(
+                offset: const Offset(0, -28),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.movie.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Color(0xFFE50914),
-                          fontWeight: FontWeight.w800,
+                          fontSize: 26,
+                          height: 1.15,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.3,
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      _MetaRow(movie: widget.movie),
+                      if (widget.isEpisode) ...[
+                        const SizedBox(height: 12),
+                        _EpisodeChip(
+                          season: widget.season!,
+                          episode: widget.episode!,
+                        ),
+                      ],
+                      const SizedBox(height: 22),
+                      _InlinePlayer(
+                        selected: _selected,
+                        url: _selected == null ? null : _urlFor(_selected!),
+                        onExpand: _selected == null
+                            ? null
+                            : () => _openFullscreen(_selected!),
+                      ),
+                      const SizedBox(height: 26),
+                      Row(
+                        children: [
+                          Text(
+                            'Sources',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.4,
+                              color: Colors.white.withValues(alpha: 0.6),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${playerSources.length} available',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.white38,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      for (final source in playerSources)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _SourceTile(
+                              source: source,
+                              busy: _openingSource == source.name,
+                              selected: _selected?.name == source.name,
+                              onTap: () => _select(source),
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // Keeps the back button legible over a bright backdrop.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: Container(
+                height: kToolbarHeight + MediaQuery.paddingOf(context).top,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.7),
+                      Colors.black.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Fixed 16:9 stage that previews the selected source in place.
+///
+/// Exactly one embed is alive at a time: the [ValueKey] includes the source
+/// name, so switching sources rebuilds the subtree and releases the previous
+/// platform WebView. Keeping several alive would leave multiple audio tracks
+/// playing and hold a lot of memory.
+class _InlinePlayer extends StatelessWidget {
+  const _InlinePlayer({required this.selected, this.url, this.onExpand});
+
+  final PlayerSource? selected;
+  final Uri? url;
+  final VoidCallback? onExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = selected;
+    final target = url;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: DecoratedBox(
+              decoration: const BoxDecoration(color: Colors.black),
+              child: target == null
+                  ? const _PlayerPlaceholder()
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        EmbedPlayerView(
+                          key: ValueKey('embed-${source!.name}'),
+                          url: target,
+                        ),
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: _CircleButton(
+                            icon: Icons.open_in_full_rounded,
+                            tooltip: 'Fullscreen',
+                            onTap: onExpand,
+                          ),
+                        ),
+                      ],
                     ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          source == null
+              ? 'Pick a source to start playing'
+              : 'Now playing from ${source.name}',
+          style: const TextStyle(
+            color: Colors.white54,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlayerPlaceholder extends StatelessWidget {
+  const _PlayerPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.18),
+                width: 1.5,
+              ),
+            ),
+            child: const Icon(
+              Icons.play_arrow_rounded,
+              size: 32,
+              color: Colors.white38,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Select a source',
+            style: TextStyle(color: Colors.white38, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CircleButton extends StatelessWidget {
+  const _CircleButton({
+    required this.icon,
+    required this.tooltip,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.55),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(7),
+            child: Icon(icon, size: 18, color: Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Backdrop artwork that fades into the page background.
+class _Hero extends StatelessWidget {
+  const _Hero({required this.height, this.imageUrl});
+
+  final double height;
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          PosterImage(imageUrl: imageUrl, borderRadius: 0),
+          // Fades to the scaffold colour so the title below reads cleanly.
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [0, 0.55, 1],
+                colors: [
+                  Color(0x66000000),
+                  Color(0x1A000000),
+                  Color(0xFF090909),
                 ],
               ),
             ),
-            for (final source in playerSources)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: ListTile(
-                  minTileHeight: 64,
-                  tileColor: const Color(0xFF1D1D1D),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Year, rating, media type and a short overview under the title.
+class _MetaRow extends StatelessWidget {
+  const _MetaRow({required this.movie});
+
+  final Movie movie;
+
+  @override
+  Widget build(BuildContext context) {
+    final isSeries = movie.mediaType == 'tv';
+    const secondary = TextStyle(
+      color: Colors.white70,
+      fontWeight: FontWeight.w600,
+    );
+    return Row(
+      children: [
+        Text(movie.year, style: secondary),
+        const _Dot(),
+        Icon(Icons.star_rounded, size: 16, color: Colors.amber),
+        const SizedBox(width: 4),
+        Text(movie.voteAverage.toStringAsFixed(1), style: secondary),
+        const _Dot(),
+        Icon(
+          isSeries ? Icons.tv_rounded : Icons.movie_outlined,
+          size: 15,
+          color: Colors.white54,
+        ),
+        const SizedBox(width: 5),
+        Text(
+          isSeries ? 'Series' : 'Movie',
+          style: const TextStyle(color: Colors.white54),
+        ),
+        if (movie.overview.isNotEmpty) ...[
+          const _Dot(),
+          Expanded(
+            child: Text(
+              movie.overview,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white38, height: 1.35),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _Dot extends StatelessWidget {
+  const _Dot();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(horizontal: 8),
+    child: Text('•', style: TextStyle(color: Colors.white24)),
+  );
+}
+
+/// Season/episode pill for a series opened on a specific episode.
+class _EpisodeChip extends StatelessWidget {
+  const _EpisodeChip({required this.season, required this.episode});
+
+  final int season;
+  final int episode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE50914).withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: const Color(0xFFE50914).withValues(alpha: 0.45),
+        ),
+      ),
+      child: Text(
+        'Season $season  ·  Episode $episode',
+        style: const TextStyle(
+          color: Color(0xFFE50914),
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+/// One selectable playback provider.
+class _SourceTile extends StatelessWidget {
+  const _SourceTile({
+    required this.source,
+    required this.onTap,
+    this.busy = false,
+    this.selected = false,
+  });
+
+  final PlayerSource source;
+  final VoidCallback onTap;
+  final bool busy;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 160),
+      opacity: busy ? 0.6 : 1,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFFE50914)
+                : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Material(
+          color: busy ? const Color(0xFF241012) : const Color(0xFF161616),
+          borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: busy ? null : onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE50914).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  leading: const Icon(
-                    Icons.play_circle_fill_rounded,
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
                     color: Color(0xFFE50914),
+                    size: 24,
                   ),
-                  title: Text(
-                    source.name,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  subtitle: Text(source.host),
-                  trailing: _openingSource == source.name
-                      ? const SizedBox.square(
-                          dimension: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.open_in_new_rounded),
-                  onTap: () => _openSource(source),
                 ),
-              ),
-          ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        source.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        source.host,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white38,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: busy
+                      ? const CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFFE50914),
+                        )
+                      : const Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.white38,
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
         ),
       ),
     );

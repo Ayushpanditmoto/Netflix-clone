@@ -197,9 +197,8 @@ class _SeasonTabs extends StatelessWidget {
 
 /// One swipeable page per season.
 ///
-/// The height is driven by the tallest page so the pager does not resize while
-/// the user swipes, which would make the gesture feel like it is fighting the
-/// layout. Pages scroll internally when their episodes overflow.
+/// The height is driven by the current page content so episode rows remain
+/// part of the parent page's scroll instead of creating a nested scroll area.
 class _SeasonPages extends ConsumerWidget {
   const _SeasonPages({
     required this.seriesId,
@@ -218,8 +217,7 @@ class _SeasonPages extends ConsumerWidget {
   final ValueChanged<int> onPageChanged;
   final void Function(int season, int episode)? onEpisodeTap;
 
-  /// The season currently on screen, used to size the viewport to the content
-  /// the user is actually looking at.
+  /// The season currently on screen, used to size the viewport to its content.
   final int currentSeasonNumber;
 
   @override
@@ -236,38 +234,33 @@ class _SeasonPages extends ConsumerWidget {
         controller: controller,
         onPageChanged: onPageChanged,
         itemCount: seasons.length,
-        itemBuilder: (context, index) =>
-            _Episodes(
-              seriesId: seriesId,
-              season: seasons[index].number,
-              onEpisodeTap: onEpisodeTap,
-            ),
+        itemBuilder: (context, index) => _Episodes(
+          seriesId: seriesId,
+          season: seasons[index].number,
+          onEpisodeTap: onEpisodeTap,
+        ),
       ),
     );
   }
 
-  /// Roughly one row per episode, capped so a long season scrolls inside the
-  /// page instead of stretching the sheet to an unusable height.
+  /// One row per episode so the parent player page owns vertical scrolling.
   double _heightFor(AsyncValue<List<Episode>> episodes) {
     return episodes.when(
       loading: () => _rowHeight * 3,
       error: (error, stackTrace) => 72,
-      data: (list) {
-        if (list.isEmpty) return 72;
-        final visible = list.length > _maxVisibleRows
-            ? _maxVisibleRows
-            : list.length;
-        return _rowHeight * visible;
-      },
+      data: (list) => list.isEmpty ? 72 : _rowHeight * list.length,
     );
   }
 }
 
 const double _rowHeight = 104;
-const int _maxVisibleRows = 4;
 
 class _Episodes extends ConsumerWidget {
-  const _Episodes({required this.seriesId, required this.season, this.onEpisodeTap});
+  const _Episodes({
+    required this.seriesId,
+    required this.season,
+    this.onEpisodeTap,
+  });
 
   final int seriesId;
   final int season;
@@ -281,12 +274,8 @@ class _Episodes extends ConsumerWidget {
     ));
     final episodes = ref.watch(provider);
 
-    // The page has a fixed height, so a long season scrolls inside itself
-    // rather than growing the bottom sheet mid-swipe.
     return episodes.when(
-      loading: () => ListView(
-        physics: const NeverScrollableScrollPhysics(),
-        padding: EdgeInsets.zero,
+      loading: () => Column(
         children: List.generate(
           3,
           (index) => const Padding(
@@ -295,9 +284,7 @@ class _Episodes extends ConsumerWidget {
           ),
         ),
       ),
-      error: (error, stackTrace) => ListView(
-        physics: const NeverScrollableScrollPhysics(),
-        padding: EdgeInsets.zero,
+      error: (error, stackTrace) => Column(
         children: [
           TextButton.icon(
             onPressed: () => ref.invalidate(provider),
@@ -313,16 +300,17 @@ class _Episodes extends ConsumerWidget {
             style: TextStyle(color: Colors.white54),
           );
         }
-        return ListView.separated(
-          padding: EdgeInsets.zero,
-          itemCount: list.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 12),
-          itemBuilder: (context, index) =>
+        return Column(
+          children: [
+            for (var index = 0; index < list.length; index++) ...[
               _EpisodeRow(
                 seriesId: seriesId,
                 episode: list[index],
                 onEpisodeTap: onEpisodeTap,
               ),
+              if (index < list.length - 1) const SizedBox(height: 12),
+            ],
+          ],
         );
       },
     );
@@ -330,7 +318,11 @@ class _Episodes extends ConsumerWidget {
 }
 
 class _EpisodeRow extends StatelessWidget {
-  const _EpisodeRow({required this.seriesId, required this.episode, this.onEpisodeTap});
+  const _EpisodeRow({
+    required this.seriesId,
+    required this.episode,
+    this.onEpisodeTap,
+  });
 
   final int seriesId;
   final Episode episode;

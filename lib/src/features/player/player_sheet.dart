@@ -4,9 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'episode_list.dart';
 
 import '../../models/movie.dart';
-import '../../models/player_source.dart';
 import 'player_screen.dart';
-import 'player_session.dart';
 import '../home/home_providers.dart';
 
 /// Season list for a series. Only ever watched for `mediaType == 'tv'`.
@@ -48,13 +46,6 @@ void showPlayerSheet(
   int? episode,
 }) {
   FocusManager.instance.primaryFocus?.unfocus();
-  final session = PlayerSessionScope.of(context);
-  session.start(
-    value: movie,
-    selectedSource: defaultPlayerSource,
-    selectedSeason: season ?? (movie.mediaType == 'tv' ? 1 : null),
-    selectedEpisode: episode ?? (movie.mediaType == 'tv' ? 1 : null),
-  );
   Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) =>

@@ -96,23 +96,7 @@ class _EmbedPlayerViewState extends State<EmbedPlayerView> {
     final controller = WebViewController.fromPlatformCreationParams(
       buildEmbedParams(),
     );
-    await configureEmbedPlatform(
-      controller,
-      onProgress: widget.onProgress,
-      onPageFinished: (_) {
-        controller.runJavaScript('''
-          document.addEventListener('fullscreenchange', function () {
-            if (document.fullscreenElement) {
-              if (screen.orientation && screen.orientation.lock) {
-                screen.orientation.lock('landscape').catch(function () {});
-              }
-            } else if (screen.orientation && screen.orientation.unlock) {
-              screen.orientation.unlock();
-            }
-          });
-        ''');
-      },
-    );
+    await configureEmbedPlatform(controller, onProgress: widget.onProgress);
     if (!mounted) return;
     setState(() => _controller = controller);
     if (widget.requiresIframe) {
@@ -131,20 +115,9 @@ class _EmbedPlayerViewState extends State<EmbedPlayerView> {
     <iframe
       src="$escapedUrl"
       title="Video player"
-      allow="autoplay; fullscreen; encrypted-media; picture-in-picture; orientation *"
+      allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
       allowfullscreen>
     </iframe>
-    <script>
-      document.addEventListener('fullscreenchange', function () {
-        if (document.fullscreenElement) {
-          if (screen.orientation && screen.orientation.lock) {
-            screen.orientation.lock('landscape').catch(function () {});
-          }
-        } else if (screen.orientation && screen.orientation.unlock) {
-          screen.orientation.unlock();
-        }
-      });
-    </script>
   </body>
 </html>
         ''', baseUrl: 'https://vidbolt.pro/');

@@ -4,7 +4,6 @@ import '../../models/movie.dart';
 import '../../models/player_source.dart';
 import 'embed_player_view.dart';
 import 'episode_list.dart';
-import 'player_session.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -43,11 +42,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _select(PlayerSource source) {
     setState(() => _selected = source);
-    PlayerSessionScope.of(context).update(
-      selectedSource: source,
-      selectedSeason: _season,
-      selectedEpisode: _episode,
-    );
   }
 
   /// Switches to a new episode in the same player screen.
@@ -57,15 +51,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _episode = episode;
       // Keep the same source but reload the embed (new ValueKey will do it).
     });
-    PlayerSessionScope.of(context).update(
-      selectedSource: _selected,
-      selectedSeason: season,
-      selectedEpisode: episode,
-    );
   }
 
-  void _minimize() {
-    PlayerSessionScope.of(context).minimize();
+  void _closeAfterSwipe() {
+    if (!mounted) return;
+    _pullDownDistance = 0;
     Navigator.of(context).pop();
   }
 
@@ -101,181 +91,164 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope<void>(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        _minimize();
-      },
-      child: Scaffold(
-        backgroundColor: const Color(0xFF090909),
-        body: SafeArea(
-          bottom: false,
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              if (notification is OverscrollNotification &&
-                  notification.metrics.pixels <= 0 &&
-                  notification.overscroll < 0) {
-                _pullDownDistance += -notification.overscroll;
-                if (_pullDownDistance >= 80) {
-                  _pullDownDistance = 0;
-                  _minimize();
-                }
-              } else if (notification is ScrollEndNotification) {
-                _pullDownDistance = 0;
-              }
-              return false;
-            },
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 32),
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onVerticalDragUpdate: (details) {
-                    if (details.delta.dy > 0) {
-                      _pullDownDistance += details.delta.dy;
-                      if (_pullDownDistance >= 60) {
-                        _pullDownDistance = 0;
-                        _minimize();
-                      }
-                    } else {
-                      _pullDownDistance = 0;
-                    }
-                  },
-                  onVerticalDragEnd: (_) => _pullDownDistance = 0,
-                  child: const SizedBox(height: 28),
-                ),
-                _InlinePlayer(
-                  selected: _selected,
-                  season: _season,
-                  episode: _episode,
-                  url: _urlFor(_selected),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.movie.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 26,
-                          height: 1.15,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      _MetaRow(movie: widget.movie),
-                      const SizedBox(height: 18),
-
-                      // ── 1. Episode and source controls ─────────────────────
-                      if (_isEpisode)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: _EpisodeChip(
-                                season: _season!,
-                                episode: _episode!,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              flex: 2,
-                              child: _SourceSelectorBar(
-                                selected: _selected,
-                                totalSources: playerSources.length,
-                                onTap: _showSourcePicker,
-                                compact: true,
-                              ),
-                            ),
-                          ],
-                        )
-                      else
-                        _SourceSelectorBar(
-                          selected: _selected,
-                          totalSources: playerSources.length,
-                          onTap: _showSourcePicker,
-                        ),
-                      if (widget.movie.overview.isNotEmpty) ...[
-                        const SizedBox(height: 18),
-                        Text(
-                          widget.movie.overview,
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            height: 1.45,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-
-                      // ── 2. Episodes (TV series only) ───────────────────────
-                      if (widget.movie.mediaType == 'tv') ...[
-                        Row(
-                          children: [
-                            const Text(
-                              'Episodes',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const Spacer(),
-                            if (_isEpisode)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE50914)
-                                      .withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: const Color(0xFFE50914)
-                                        .withValues(alpha: 0.45),
-                                  ),
-                                ),
-                                child: Text(
-                                  'S$_season E$_episode',
-                                  style: const TextStyle(
-                                    color: Color(0xFFE50914),
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        EpisodeList(
-                          movie: widget.movie,
-                          onEpisodeTap: _playEpisode,
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-
-                      // ── Disclaimer ─────────────────────────────────────────
-                      Text(
-                        '⚠️ Educational demo only. Sources are third-party embeds not operated by this project.',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.white.withValues(alpha: 0.28),
-                          height: 1.6,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+    return Scaffold(
+      backgroundColor: const Color(0xFF090909),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            const SizedBox(height: 28),
+            _InlinePlayer(
+              selected: _selected,
+              season: _season,
+              episode: _episode,
+              url: _urlFor(_selected),
             ),
-          ),
+            Expanded(
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  if (notification is OverscrollNotification &&
+                      notification.metrics.pixels <= 0 &&
+                      notification.overscroll < 0) {
+                    _pullDownDistance += -notification.overscroll;
+                    if (_pullDownDistance >= 80) {
+                      _closeAfterSwipe();
+                    }
+                  } else if (notification is ScrollEndNotification) {
+                    _pullDownDistance = 0;
+                  }
+                  return false;
+                },
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(0, 16, 0, 32),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.movie.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 26,
+                              height: 1.15,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _MetaRow(movie: widget.movie),
+                          const SizedBox(height: 18),
+
+                          // ── 1. Episode and source controls ─────────────────────
+                          if (_isEpisode)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: _EpisodeChip(
+                                    season: _season!,
+                                    episode: _episode!,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  flex: 2,
+                                  child: _SourceSelectorBar(
+                                    selected: _selected,
+                                    totalSources: playerSources.length,
+                                    onTap: _showSourcePicker,
+                                    compact: true,
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            _SourceSelectorBar(
+                              selected: _selected,
+                              totalSources: playerSources.length,
+                              onTap: _showSourcePicker,
+                            ),
+                          if (widget.movie.overview.isNotEmpty) ...[
+                            const SizedBox(height: 18),
+                            Text(
+                              widget.movie.overview,
+                              maxLines: 4,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                height: 1.45,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 24),
+
+                          // ── 2. Episodes (TV series only) ───────────────────────
+                          if (widget.movie.mediaType == 'tv') ...[
+                            Row(
+                              children: [
+                                const Text(
+                                  'Episodes',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (_isEpisode)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE50914)
+                                          .withValues(alpha: 0.14),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: const Color(0xFFE50914)
+                                            .withValues(alpha: 0.45),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Playing · S$_season E$_episode',
+                                      style: const TextStyle(
+                                        color: Color(0xFFE50914),
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            EpisodeList(
+                              movie: widget.movie,
+                              onEpisodeTap: _playEpisode,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+
+                          // ── Disclaimer ─────────────────────────────────────────
+                          Text(
+                            '⚠️ Educational demo only. Sources are third-party embeds not operated by this project.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.white.withValues(alpha: 0.28),
+                              height: 1.6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -631,17 +604,6 @@ class _InlinePlayer extends StatelessWidget {
                       requiresIframe: source.requiresIframe,
                     ),
             ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          source == null
-              ? 'Pick a source to start playing'
-              : "Now playing from ${source.name} · If it doesn't load, try another source.",
-          style: const TextStyle(
-            color: Colors.white54,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
           ),
         ),
       ],

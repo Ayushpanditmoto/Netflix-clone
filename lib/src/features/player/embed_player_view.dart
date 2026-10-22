@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
@@ -30,7 +31,7 @@ Future<void> configureEmbedPlatform(
 }) async {
   await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
   await controller.setBackgroundColor(const Color(0xFF000000));
-  if (onProgress != null) {
+  if (onProgress != null || onPageFinished != null) {
     await controller.setNavigationDelegate(
       NavigationDelegate(
         onProgress: onProgress,
@@ -85,6 +86,16 @@ class EmbedPlayerView extends StatefulWidget {
 
 class _EmbedPlayerViewState extends State<EmbedPlayerView> {
   WebViewController? _controller;
+  bool _isFullscreen = false;
+
+  static const _portraitOrientations = <DeviceOrientation>[
+    DeviceOrientation.portraitUp,
+  ];
+
+  static const _landscapeOrientations = <DeviceOrientation>[
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ];
 
   @override
   void initState() {
@@ -96,7 +107,17 @@ class _EmbedPlayerViewState extends State<EmbedPlayerView> {
     final controller = WebViewController.fromPlatformCreationParams(
       buildEmbedParams(),
     );
-    await configureEmbedPlatform(controller, onProgress: widget.onProgress);
+    await controller.addJavaScriptChannel(
+      'fullscreenChannel',
+      onMessageReceived: (message) {
+        _setFullscreen(message.message == 'enter');
+      },
+    );
+    await configureEmbedPlatform(
+      controller,
+      onProgress: widget.onProgress,
+      onPageFinished: (_) => controller.runJavaScript(_fullscreenScript),
+    );
     if (!mounted) return;
     setState(() => _controller = controller);
     if (widget.requiresIframe) {
@@ -126,6 +147,26 @@ class _EmbedPlayerViewState extends State<EmbedPlayerView> {
     }
   }
 
+  void _setFullscreen(bool fullscreen) {
+    if (!mounted || _isFullscreen == fullscreen) return;
+    _isFullscreen = fullscreen;
+    SystemChrome.setEnabledSystemUIMode(
+      fullscreen ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+    );
+    SystemChrome.setPreferredOrientations(
+      fullscreen ? _landscapeOrientations : _portraitOrientations,
+    );
+  }
+
+  @override
+  void dispose() {
+    if (_isFullscreen) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setPreferredOrientations(_portraitOrientations);
+    }
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
@@ -133,6 +174,20 @@ class _EmbedPlayerViewState extends State<EmbedPlayerView> {
     return WebViewWidget(controller: controller);
   }
 }
+
+const _fullscreenScript = '''
+  (function () {
+    if (window.__flutterFullscreenListenerInstalled) return;
+    window.__flutterFullscreenListenerInstalled = true;
+    document.addEventListener('fullscreenchange', function () {
+      if (window.fullscreenChannel) {
+        window.fullscreenChannel.postMessage(
+          document.fullscreenElement ? 'enter' : 'exit'
+        );
+      }
+    });
+  })();
+''';
 
 String _escapeHtmlAttribute(String value) => value
     .replaceAll('&', '&amp;')

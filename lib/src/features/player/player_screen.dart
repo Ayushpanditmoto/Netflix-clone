@@ -586,25 +586,37 @@ class _InlinePlayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final source = selected;
     final target = url;
+    final maxVideoHeight = MediaQuery.sizeOf(context).height * 0.45;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: DecoratedBox(
-              decoration: const BoxDecoration(color: Colors.black),
-              child: target == null
-                  ? const _PlayerPlaceholder()
-                  : EmbedPlayerView(
-                      key: ValueKey('embed-${source!.name}-$season-$episode'),
-                      url: target,
-                      requiresIframe: source.requiresIframe,
-                    ),
-            ),
-          ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final naturalHeight = constraints.maxWidth * 9 / 16;
+            final videoHeight = naturalHeight > maxVideoHeight
+                ? maxVideoHeight
+                : naturalHeight;
+            return SizedBox(
+              width: double.infinity,
+              height: videoHeight,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(color: Colors.black),
+                  child: target == null
+                      ? const _PlayerPlaceholder()
+                      : EmbedPlayerView(
+                          key: ValueKey(
+                            'embed-${source!.name}-$season-$episode',
+                          ),
+                          url: target,
+                          requiresIframe: source.requiresIframe,
+                        ),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );

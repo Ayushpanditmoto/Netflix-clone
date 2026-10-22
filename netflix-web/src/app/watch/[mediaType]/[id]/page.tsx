@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Image from 'next/image';
-import { PLAYER_SOURCES } from '@/lib/playerSources';
+import { DEFAULT_PLAYER_SOURCE_NAME, PLAYER_SOURCES } from '@/lib/playerSources';
 import { urlFor } from '@/types/tmdb';
 import { QUERY_KEYS } from '@/lib/queryKeys';
 import { fetchEpisodes, fetchMovieById, fetchSeasons, fetchSimilarMovies, movieYear, tmdbImageUrl } from '@/lib/tmdb';
@@ -17,7 +17,7 @@ export default function WatchPage() {
   const router = useRouter();
   const mediaType = params.mediaType === 'tv' ? 'tv' : 'movie';
   const id = Number(params.id);
-  const [sourceName, setSourceName] = useState(PLAYER_SOURCES[0]?.name ?? '');
+  const [sourceName, setSourceName] = useState(DEFAULT_PLAYER_SOURCE_NAME);
   const [selectedSeason, setSelectedSeason] = useState<number>();
   const [episode, setEpisode] = useState<{ season: number; number: number }>();
   const [playerKey, setPlayerKey] = useState(0);

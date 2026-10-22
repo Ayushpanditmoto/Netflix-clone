@@ -31,3 +31,5 @@ export const PLAYER_SOURCES: PlayerSource[] = [
       `https://cinesrc.st/embed/tv/${id}?season=${season}&episode=${episode}`,
   },
 ];
+
+export const DEFAULT_PLAYER_SOURCE_NAME = 'Vidrift';

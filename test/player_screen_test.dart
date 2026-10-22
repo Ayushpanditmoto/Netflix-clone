@@ -49,6 +49,12 @@ void main() {
     expect(find.text('Season 2  ·  Episode 4'), findsOneWidget);
   });
 
+  testWidgets('defaults a series to Season 1 Episode 1', (tester) async {
+    await tester.pumpWidget(_host(_movie(mediaType: 'tv')));
+
+    expect(find.text('Season 1  ·  Episode 1'), findsOneWidget);
+  });
+
   testWidgets('omits the episode pill for a movie', (tester) async {
     await tester.pumpWidget(_host(_movie()));
     expect(find.textContaining('Season'), findsNothing);

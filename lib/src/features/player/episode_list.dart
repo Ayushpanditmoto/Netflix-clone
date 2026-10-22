@@ -12,9 +12,14 @@ import 'player_sheet.dart';
 ///
 /// Episodes are labelled `S1:E1  •  1x01`.
 class EpisodeList extends ConsumerStatefulWidget {
-  const EpisodeList({super.key, required this.movie});
+  const EpisodeList({super.key, required this.movie, this.onEpisodeTap});
 
   final Movie movie;
+
+  /// Called when the user taps an episode row. When set (e.g. from the
+  /// PlayerScreen), the episode plays in-place instead of pushing a new
+  /// PlayerScreen onto the navigation stack.
+  final void Function(int season, int episode)? onEpisodeTap;
 
   @override
   ConsumerState<EpisodeList> createState() => _EpisodeListState();
@@ -131,6 +136,7 @@ class _EpisodeListState extends ConsumerState<EpisodeList> {
               controller: _pageController!,
               onPageChanged: (next) => _onPageChanged(next, list),
               currentSeasonNumber: seasonNumber,
+              onEpisodeTap: widget.onEpisodeTap,
             ),
           ],
         );
@@ -202,6 +208,7 @@ class _SeasonPages extends ConsumerWidget {
     required this.controller,
     required this.onPageChanged,
     required this.currentSeasonNumber,
+    this.onEpisodeTap,
   });
 
   final int seriesId;
@@ -209,6 +216,7 @@ class _SeasonPages extends ConsumerWidget {
   final int initialIndex;
   final PageController controller;
   final ValueChanged<int> onPageChanged;
+  final void Function(int season, int episode)? onEpisodeTap;
 
   /// The season currently on screen, used to size the viewport to the content
   /// the user is actually looking at.
@@ -229,7 +237,11 @@ class _SeasonPages extends ConsumerWidget {
         onPageChanged: onPageChanged,
         itemCount: seasons.length,
         itemBuilder: (context, index) =>
-            _Episodes(seriesId: seriesId, season: seasons[index].number),
+            _Episodes(
+              seriesId: seriesId,
+              season: seasons[index].number,
+              onEpisodeTap: onEpisodeTap,
+            ),
       ),
     );
   }
@@ -255,10 +267,11 @@ const double _rowHeight = 104;
 const int _maxVisibleRows = 4;
 
 class _Episodes extends ConsumerWidget {
-  const _Episodes({required this.seriesId, required this.season});
+  const _Episodes({required this.seriesId, required this.season, this.onEpisodeTap});
 
   final int seriesId;
   final int season;
+  final void Function(int season, int episode)? onEpisodeTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -305,7 +318,11 @@ class _Episodes extends ConsumerWidget {
           itemCount: list.length,
           separatorBuilder: (context, index) => const SizedBox(height: 12),
           itemBuilder: (context, index) =>
-              _EpisodeRow(seriesId: seriesId, episode: list[index]),
+              _EpisodeRow(
+                seriesId: seriesId,
+                episode: list[index],
+                onEpisodeTap: onEpisodeTap,
+              ),
         );
       },
     );
@@ -313,10 +330,11 @@ class _Episodes extends ConsumerWidget {
 }
 
 class _EpisodeRow extends StatelessWidget {
-  const _EpisodeRow({required this.seriesId, required this.episode});
+  const _EpisodeRow({required this.seriesId, required this.episode, this.onEpisodeTap});
 
   final int seriesId;
   final Episode episode;
+  final void Function(int season, int episode)? onEpisodeTap;
 
   /// Playback needs the *series* id while the sheet should show the episode
   /// title, so a Movie carrying both is synthesised here instead of threading
@@ -341,12 +359,20 @@ class _EpisodeRow extends StatelessWidget {
 
     return InkWell(
       borderRadius: BorderRadius.circular(8),
-      onTap: () => showPlayerSheet(
-        context,
-        _asMovie,
-        season: episode.seasonNumber,
-        episode: episode.number,
-      ),
+      onTap: () {
+        if (onEpisodeTap != null) {
+          // Play in-place inside the current PlayerScreen.
+          onEpisodeTap!(episode.seasonNumber, episode.number);
+        } else {
+          // Fallback: open a new PlayerScreen (used from detail sheet).
+          showPlayerSheet(
+            context,
+            _asMovie,
+            season: episode.seasonNumber,
+            episode: episode.number,
+          );
+        }
+      },
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

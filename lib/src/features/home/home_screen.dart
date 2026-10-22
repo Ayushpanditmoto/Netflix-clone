@@ -297,7 +297,7 @@ class _SearchResults extends ConsumerWidget {
                       return MovieTile(
                         movie: movie,
                         showTitle: true,
-                        onTap: () => showMovieDetails(context, movie),
+                        onTap: () => showPlayerSheet(context, movie),
                       );
                     },
                   );
@@ -472,7 +472,7 @@ class _MovieRailState extends ConsumerState<_MovieRail> {
                   width: 142,
                   child: MovieTile(
                     movie: movie,
-                    onTap: () => showMovieDetails(context, movie),
+                    onTap: () => showPlayerSheet(context, movie),
                   ),
                 );
               },

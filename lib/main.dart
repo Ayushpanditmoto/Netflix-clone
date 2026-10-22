@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'src/features/home/home_screen.dart';
+import 'src/features/player/player_session.dart';
 import 'src/theme/app_theme.dart';
 
 void main() {
@@ -17,7 +18,7 @@ class NetflixCloneApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Netflix',
       theme: AppTheme.dark(),
-      home: const HomeScreen(),
+      home: const PlayerHost(child: HomeScreen()),
     );
   }
 }

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../models/movie.dart';
 import '../../models/player_source.dart';
-import '../../widgets/poster_image.dart';
 import 'embed_player_view.dart';
+import 'episode_list.dart';
+import 'player_session.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -28,34 +28,45 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  String? _openingSource;
+  /// Source currently loaded in the inline player.
+  PlayerSource _selected = defaultPlayerSource;
+  double _pullDownDistance = 0;
 
-  /// Source currently loaded in the inline player. Switching this rebuilds the
-  /// embed with a new key, which releases the previous WebView and stops its
-  /// audio before the next one starts.
-  PlayerSource? _selected;
+  /// Mutable season/episode — updated in-place when user taps an episode row
+  /// so we stay on this screen instead of pushing a new PlayerScreen.
+  late int? _season =
+      widget.season ?? (widget.movie.mediaType == 'tv' ? 1 : null);
+  late int? _episode =
+      widget.episode ?? (widget.movie.mediaType == 'tv' ? 1 : null);
 
-  @override
-  void initState() {
-    super.initState();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-  }
-
-  @override
-  void dispose() {
-    // Restore system UI when leaving the player.
-    SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.manual,
-      overlays: SystemUiOverlay.values,
-    );
-    super.dispose();
-  }
+  bool get _isEpisode => _season != null && _episode != null;
 
   void _select(PlayerSource source) {
+    setState(() => _selected = source);
+    PlayerSessionScope.of(context).update(
+      selectedSource: source,
+      selectedSeason: _season,
+      selectedEpisode: _episode,
+    );
+  }
+
+  /// Switches to a new episode in the same player screen.
+  void _playEpisode(int season, int episode) {
     setState(() {
-      _selected = source;
-      _openingSource = source.name;
+      _season = season;
+      _episode = episode;
+      // Keep the same source but reload the embed (new ValueKey will do it).
     });
+    PlayerSessionScope.of(context).update(
+      selectedSource: _selected,
+      selectedSeason: season,
+      selectedEpisode: episode,
+    );
+  }
+
+  void _minimize() {
+    PlayerSessionScope.of(context).minimize();
+    Navigator.of(context).pop();
   }
 
   Uri? _urlFor(PlayerSource source) {
@@ -63,34 +74,86 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return source.urlFor(
         widget.movie.id,
         widget.movie.mediaType,
-        season: widget.season,
-        episode: widget.episode,
+        season: _season,
+        episode: _episode,
       );
     } on Object {
       return null;
     }
   }
 
+  /// Opens the source-picker bottom sheet (mirrors the web PlayerModal source list).
+  Future<void> _showSourcePicker() async {
+    await showModalBottomSheet<PlayerSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _SourcePickerSheet(
+        sources: playerSources,
+        selected: _selected,
+        onSelect: (source) {
+          Navigator.of(context).pop();
+          _select(source);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final heroHeight = (width * 9 / 16).clamp(200.0, 380.0);
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF090909),
-      body: Stack(
-        children: [
-          ListView(
-            padding: const EdgeInsets.only(bottom: 32),
-            children: [
-              _Hero(
-                height: heroHeight,
-                imageUrl: widget.movie.backdropUrl ?? widget.movie.posterUrl,
-              ),
-              Transform.translate(
-                offset: const Offset(0, -28),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+    return PopScope<void>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _minimize();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF090909),
+        body: SafeArea(
+          bottom: false,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is OverscrollNotification &&
+                  notification.metrics.pixels <= 0 &&
+                  notification.overscroll < 0) {
+                _pullDownDistance += -notification.overscroll;
+                if (_pullDownDistance >= 80) {
+                  _pullDownDistance = 0;
+                  _minimize();
+                }
+              } else if (notification is ScrollEndNotification) {
+                _pullDownDistance = 0;
+              }
+              return false;
+            },
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 32),
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragUpdate: (details) {
+                    if (details.delta.dy > 0) {
+                      _pullDownDistance += details.delta.dy;
+                      if (_pullDownDistance >= 60) {
+                        _pullDownDistance = 0;
+                        _minimize();
+                      }
+                    } else {
+                      _pullDownDistance = 0;
+                    }
+                  },
+                  onVerticalDragEnd: (_) => _pullDownDistance = 0,
+                  child: const SizedBox(height: 28),
+                ),
+                _InlinePlayer(
+                  selected: _selected,
+                  season: _season,
+                  episode: _episode,
+                  url: _urlFor(_selected),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -107,76 +170,322 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ),
                       const SizedBox(height: 10),
                       _MetaRow(movie: widget.movie),
-                      if (widget.isEpisode) ...[
-                        const SizedBox(height: 12),
-                        _EpisodeChip(
-                          season: widget.season!,
-                          episode: widget.episode!,
+                      const SizedBox(height: 18),
+
+                      // ── 1. Episode and source controls ─────────────────────
+                      if (_isEpisode)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: _EpisodeChip(
+                                season: _season!,
+                                episode: _episode!,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              flex: 2,
+                              child: _SourceSelectorBar(
+                                selected: _selected,
+                                totalSources: playerSources.length,
+                                onTap: _showSourcePicker,
+                                compact: true,
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        _SourceSelectorBar(
+                          selected: _selected,
+                          totalSources: playerSources.length,
+                          onTap: _showSourcePicker,
+                        ),
+                      if (widget.movie.overview.isNotEmpty) ...[
+                        const SizedBox(height: 18),
+                        Text(
+                          widget.movie.overview,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            height: 1.45,
+                          ),
                         ),
                       ],
-                      const SizedBox(height: 22),
-                      _InlinePlayer(
-                        selected: _selected,
-                        url: _selected == null ? null : _urlFor(_selected!),
-                      ),
-                      const SizedBox(height: 26),
-                      Row(
-                        children: [
-                          Text(
-                            'Sources',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1.4,
-                              color: Colors.white.withValues(alpha: 0.6),
+                      const SizedBox(height: 24),
+
+                      // ── 2. Episodes (TV series only) ───────────────────────
+                      if (widget.movie.mediaType == 'tv') ...[
+                        Row(
+                          children: [
+                            const Text(
+                              'Episodes',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            '${playerSources.length} available',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.white38,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      for (final source in playerSources)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _SourceTile(
-                            source: source,
-                            busy: _openingSource == source.name,
-                            selected: _selected?.name == source.name,
-                            onTap: () => _select(source),
-                          ),
+                            const Spacer(),
+                            if (_isEpisode)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE50914)
+                                      .withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: const Color(0xFFE50914)
+                                        .withValues(alpha: 0.45),
+                                  ),
+                                ),
+                                child: Text(
+                                  'S$_season E$_episode',
+                                  style: const TextStyle(
+                                    color: Color(0xFFE50914),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
+                        const SizedBox(height: 12),
+                        EpisodeList(
+                          movie: widget.movie,
+                          onEpisodeTap: _playEpisode,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+
+                      // ── Disclaimer ─────────────────────────────────────────
+                      Text(
+                        '⚠️ Educational demo only. Sources are third-party embeds not operated by this project.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.28),
+                          height: 1.6,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          // Keeps the back button legible over a bright backdrop.
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: IgnorePointer(
-              child: Container(
-                height: kToolbarHeight + MediaQuery.paddingOf(context).top,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.7),
-                      Colors.black.withValues(alpha: 0),
-                    ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compact source-selector bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SourceSelectorBar extends StatelessWidget {
+  const _SourceSelectorBar({
+    required this.selected,
+    required this.totalSources,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  final PlayerSource? selected;
+  final int totalSources;
+  final VoidCallback onTap;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSelection = selected != null;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+          compact ? 10 : 14,
+          compact ? 8 : 12,
+          compact ? 10 : 14,
+          compact ? 8 : 12,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161616),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: hasSelection
+                ? const Color(0xFFE50914).withValues(alpha: 0.55)
+                : Colors.white.withValues(alpha: 0.1),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: compact ? 30 : 38,
+              height: compact ? 30 : 38,
+              decoration: BoxDecoration(
+                color: hasSelection
+                    ? const Color(0xFFE50914).withValues(alpha: 0.15)
+                    : Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                hasSelection
+                    ? Icons.play_arrow_rounded
+                    : Icons.video_library_outlined,
+                color: hasSelection ? const Color(0xFFE50914) : Colors.white38,
+                size: compact ? 18 : 22,
+              ),
+            ),
+            SizedBox(width: compact ? 7 : 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!compact)
+                    Text(
+                      hasSelection ? 'Now playing from' : 'Select a source',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white.withValues(alpha: 0.45),
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  if (hasSelection) ...[
+                    if (!compact) const SizedBox(height: 2),
+                    Text(
+                      selected!.name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    if (!compact)
+                      Text(
+                        selected!.host,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white38,
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!compact)
+                  Text(
+                    hasSelection ? 'Change' : '$totalSources available',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: hasSelection
+                          ? const Color(0xFFE50914)
+                          : Colors.white38,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                const SizedBox(height: 2),
+                const Icon(
+                  Icons.expand_more_rounded,
+                  size: 18,
+                  color: Colors.white38,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom-sheet source picker
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SourcePickerSheet extends StatelessWidget {
+  const _SourcePickerSheet({
+    required this.sources,
+    required this.onSelect,
+    this.selected,
+  });
+
+  final List<PlayerSource> sources;
+  final PlayerSource? selected;
+  final ValueChanged<PlayerSource> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      decoration: const BoxDecoration(
+        color: Color(0xFF121212),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Center(
+            child: Container(
+              height: 4,
+              width: 44,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: Row(
+              children: [
+                const Text(
+                  'SOURCES',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.6,
+                    color: Colors.white60,
                   ),
                 ),
-              ),
+                const Spacer(),
+                Text(
+                  '${sources.length} available',
+                  style: const TextStyle(fontSize: 12, color: Colors.white38),
+                ),
+              ],
+            ),
+          ),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              itemCount: sources.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, i) {
+                final source = sources[i];
+                final isSelected = selected?.name == source.name;
+                return _SourceSheetTile(
+                  source: source,
+                  isSelected: isSelected,
+                  onTap: () => onSelect(source),
+                );
+              },
             ),
           ),
         ],
@@ -185,17 +494,120 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 }
 
-/// Fixed 16:9 stage that previews the selected source in place.
-///
-/// Exactly one embed is alive at a time: the [ValueKey] includes the source
-/// name, so switching sources rebuilds the subtree and releases the previous
-/// platform WebView. Keeping several alive would leave multiple audio tracks
-/// playing and hold a lot of memory.
+class _SourceSheetTile extends StatelessWidget {
+  const _SourceSheetTile({
+    required this.source,
+    required this.onTap,
+    this.isSelected = false,
+  });
+
+  final PlayerSource source;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isSelected ? const Color(0xFFE50914) : Colors.transparent,
+          width: 1.5,
+        ),
+      ),
+      child: Material(
+        color: isSelected ? const Color(0xFF241012) : const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE50914).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Color(0xFFE50914),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        source.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        source.host,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white38,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? const Color(0xFFE50914)
+                        : Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    isSelected ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inline player (16:9 embed stage)
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _InlinePlayer extends StatelessWidget {
-  const _InlinePlayer({required this.selected, this.url});
+  const _InlinePlayer({
+    required this.selected,
+    this.url,
+    this.season,
+    this.episode,
+  });
 
   final PlayerSource? selected;
   final Uri? url;
+  final int? season;
+  final int? episode;
 
   @override
   Widget build(BuildContext context) {
@@ -214,17 +626,18 @@ class _InlinePlayer extends StatelessWidget {
               child: target == null
                   ? const _PlayerPlaceholder()
                   : EmbedPlayerView(
-                      key: ValueKey('embed-${source!.name}'),
+                      key: ValueKey('embed-${source!.name}-$season-$episode'),
                       url: target,
+                      requiresIframe: source.requiresIframe,
                     ),
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Text(
           source == null
               ? 'Pick a source to start playing'
-              : 'Now playing from ${source.name}',
+              : "Now playing from ${source.name} · If it doesn't load, try another source.",
           style: const TextStyle(
             color: Colors.white54,
             fontSize: 12.5,
@@ -235,7 +648,6 @@ class _InlinePlayer extends StatelessWidget {
     );
   }
 }
-
 
 class _PlayerPlaceholder extends StatelessWidget {
   const _PlayerPlaceholder();
@@ -264,7 +676,7 @@ class _PlayerPlaceholder extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Select a source',
+            'Select a source to start playing',
             style: TextStyle(color: Colors.white38, fontSize: 13),
           ),
         ],
@@ -273,43 +685,10 @@ class _PlayerPlaceholder extends StatelessWidget {
   }
 }
 
-/// Backdrop artwork that fades into the page background.
-class _Hero extends StatelessWidget {
-  const _Hero({required this.height, this.imageUrl});
+// ─────────────────────────────────────────────────────────────────────────────
+// Metadata row
+// ─────────────────────────────────────────────────────────────────────────────
 
-  final double height;
-  final String? imageUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: height,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          PosterImage(imageUrl: imageUrl, borderRadius: 0),
-          // Fades to the scaffold colour so the title below reads cleanly.
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: [0, 0.55, 1],
-                colors: [
-                  Color(0x66000000),
-                  Color(0x1A000000),
-                  Color(0xFF090909),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Year, rating, media type and a short overview under the title.
 class _MetaRow extends StatelessWidget {
   const _MetaRow({required this.movie});
 
@@ -326,7 +705,7 @@ class _MetaRow extends StatelessWidget {
       children: [
         Text(movie.year, style: secondary),
         const _Dot(),
-        Icon(Icons.star_rounded, size: 16, color: Colors.amber),
+        const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
         const SizedBox(width: 4),
         Text(movie.voteAverage.toStringAsFixed(1), style: secondary),
         const _Dot(),
@@ -366,7 +745,10 @@ class _Dot extends StatelessWidget {
   );
 }
 
-/// Season/episode pill for a series opened on a specific episode.
+// ─────────────────────────────────────────────────────────────────────────────
+// Episode chip
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _EpisodeChip extends StatelessWidget {
   const _EpisodeChip({required this.season, required this.episode});
 
@@ -390,108 +772,6 @@ class _EpisodeChip extends StatelessWidget {
           color: Color(0xFFE50914),
           fontWeight: FontWeight.w800,
           fontSize: 12,
-        ),
-      ),
-    );
-  }
-}
-
-/// One selectable playback provider.
-class _SourceTile extends StatelessWidget {
-  const _SourceTile({
-    required this.source,
-    required this.onTap,
-    this.busy = false,
-    this.selected = false,
-  });
-
-  final PlayerSource source;
-  final VoidCallback onTap;
-  final bool busy;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 160),
-      opacity: busy ? 0.6 : 1,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? const Color(0xFFE50914) : Colors.transparent,
-            width: 1.5,
-          ),
-        ),
-        child: Material(
-          color: busy ? const Color(0xFF241012) : const Color(0xFF161616),
-          borderRadius: BorderRadius.circular(12),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: busy ? null : onTap,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE50914).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.play_arrow_rounded,
-                      color: Color(0xFFE50914),
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          source.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          source.host,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white38,
-                            fontSize: 12.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: busy
-                        ? const CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFFE50914),
-                          )
-                        : const Icon(
-                            Icons.chevron_right_rounded,
-                            color: Colors.white38,
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ),
       ),
     );

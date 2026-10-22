@@ -97,7 +97,7 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
               return MovieTile(
                 movie: movie,
                 showTitle: true,
-                onTap: () => showMovieDetails(context, movie),
+                onTap: () => showPlayerSheet(context, movie),
               );
             },
           );

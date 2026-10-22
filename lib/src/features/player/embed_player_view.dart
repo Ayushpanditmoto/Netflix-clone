@@ -26,6 +26,7 @@ PlatformWebViewControllerCreationParams buildEmbedParams() {
 Future<void> configureEmbedPlatform(
   WebViewController controller, {
   ProgressCallback? onProgress,
+  void Function(String url)? onPageFinished,
 }) async {
   await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
   await controller.setBackgroundColor(const Color(0xFF000000));
@@ -33,6 +34,7 @@ Future<void> configureEmbedPlatform(
     await controller.setNavigationDelegate(
       NavigationDelegate(
         onProgress: onProgress,
+        onPageFinished: onPageFinished,
         onNavigationRequest: (request) {
           // Embed pages navigate themselves via script or redirect to hosts
           // unrelated to the provider. Load anything web-like here so playback
@@ -66,10 +68,16 @@ Future<void> configureEmbedPlatform(
 /// down and stops its audio before a new one starts. Holding several of these
 /// at once would keep every audio track alive and waste a lot of memory.
 class EmbedPlayerView extends StatefulWidget {
-  const EmbedPlayerView({super.key, required this.url, this.onProgress});
+  const EmbedPlayerView({
+    super.key,
+    required this.url,
+    this.onProgress,
+    this.requiresIframe = false,
+  });
 
   final Uri url;
   final ProgressCallback? onProgress;
+  final bool requiresIframe;
 
   @override
   State<EmbedPlayerView> createState() => _EmbedPlayerViewState();
@@ -88,10 +96,61 @@ class _EmbedPlayerViewState extends State<EmbedPlayerView> {
     final controller = WebViewController.fromPlatformCreationParams(
       buildEmbedParams(),
     );
-    await configureEmbedPlatform(controller, onProgress: widget.onProgress);
+    await configureEmbedPlatform(
+      controller,
+      onProgress: widget.onProgress,
+      onPageFinished: (_) {
+        controller.runJavaScript('''
+          document.addEventListener('fullscreenchange', function () {
+            if (document.fullscreenElement) {
+              if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(function () {});
+              }
+            } else if (screen.orientation && screen.orientation.unlock) {
+              screen.orientation.unlock();
+            }
+          });
+        ''');
+      },
+    );
     if (!mounted) return;
     setState(() => _controller = controller);
-    await controller.loadRequest(widget.url);
+    if (widget.requiresIframe) {
+      final escapedUrl = _escapeHtmlAttribute(widget.url.toString());
+      await controller.loadHtmlString('''
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      html, body, iframe { width: 100%; height: 100%; margin: 0; border: 0; }
+      body { overflow: hidden; background: #000; }
+    </style>
+  </head>
+  <body>
+    <iframe
+      src="$escapedUrl"
+      title="Video player"
+      allow="autoplay; fullscreen; encrypted-media; picture-in-picture; orientation *"
+      allowfullscreen>
+    </iframe>
+    <script>
+      document.addEventListener('fullscreenchange', function () {
+        if (document.fullscreenElement) {
+          if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(function () {});
+          }
+        } else if (screen.orientation && screen.orientation.unlock) {
+          screen.orientation.unlock();
+        }
+      });
+    </script>
+  </body>
+</html>
+        ''', baseUrl: 'https://vidbolt.pro/');
+    } else {
+      await controller.loadRequest(widget.url);
+    }
   }
 
   @override
@@ -101,3 +160,9 @@ class _EmbedPlayerViewState extends State<EmbedPlayerView> {
     return WebViewWidget(controller: controller);
   }
 }
+
+String _escapeHtmlAttribute(String value) => value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');

@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'episode_list.dart';
 
 import '../../models/movie.dart';
-import 'player_screen.dart';
 import '../home/home_providers.dart';
+import 'playback_controller.dart';
 
 /// Season list for a series. Only ever watched for `mediaType == 'tv'`.
 final seasonsProvider = FutureProvider.autoDispose.family<List<Season>, int>((
@@ -46,12 +46,9 @@ void showPlayerSheet(
   int? episode,
 }) {
   FocusManager.instance.primaryFocus?.unfocus();
-  Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) =>
-          PlayerScreen(movie: movie, season: season, episode: episode),
-    ),
-  );
+  final controller = ProviderScope.containerOf(context)
+      .read(playbackControllerProvider.notifier);
+  controller.start(movie, season: season, episode: episode);
 }
 
 class _MovieDetailsSheet extends StatelessWidget {

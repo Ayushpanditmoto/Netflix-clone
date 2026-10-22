@@ -100,6 +100,7 @@ class _EmbedPlayerViewState extends State<EmbedPlayerView> {
   @override
   void initState() {
     super.initState();
+    if (WebViewPlatform.instance == null) return;
     _load();
   }
 

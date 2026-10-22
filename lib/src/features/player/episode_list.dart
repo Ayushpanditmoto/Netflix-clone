@@ -280,7 +280,7 @@ class _Episodes extends ConsumerWidget {
           3,
           (index) => const Padding(
             padding: EdgeInsets.only(bottom: 12),
-            child: Shimmer(child: SizedBox(height: 92, child: ShimmerBox())),
+            child: _EpisodeSkeleton(),
           ),
         ),
       ),
@@ -313,6 +313,53 @@ class _Episodes extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _EpisodeSkeleton extends StatelessWidget {
+  const _EpisodeSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer(
+      child: SizedBox(
+        height: 92,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(
+              width: 148,
+              height: 83,
+              child: ShimmerBox(borderRadius: 8),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const ShimmerBox(width: 150, height: 15),
+                    const SizedBox(height: 10),
+                    const ShimmerBox(width: 92, height: 11),
+                    const SizedBox(height: 8),
+                    const FractionallySizedBox(
+                      widthFactor: 0.82,
+                      child: ShimmerBox(height: 11),
+                    ),
+                    const Spacer(),
+                    Align(
+                      alignment: Alignment.bottomRight,
+                      child: ShimmerBox(width: 30, height: 30, borderRadius: 8),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

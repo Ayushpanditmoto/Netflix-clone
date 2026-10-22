@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
-import 'src/features/home/home_screen.dart';
+import 'src/features/player/playback_shell.dart';
 import 'src/theme/app_theme.dart';
 
 Future<void> main() async {
@@ -22,7 +22,7 @@ class NetflixCloneApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Netflix',
       theme: AppTheme.dark(),
-      home: const HomeScreen(),
+      home: const PlaybackShell(),
     );
   }
 }

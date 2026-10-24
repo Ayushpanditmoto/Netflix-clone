@@ -30,6 +30,13 @@ export const PLAYER_SOURCES: PlayerSource[] = [
     buildEpisodeUrl: (id, season, episode) =>
       `https://cinesrc.st/embed/tv/${id}?season=${season}&episode=${episode}`,
   },
+  {
+    name: 'Bingr',
+    host: 'bingr.one',
+    buildUrl: (id, mediaType) => `https://bingr.one/watch/${mediaType}/${id}`,
+    buildEpisodeUrl: (id, season, episode) =>
+      `https://bingr.one/watch/tv/${id}/${season}/${episode}`,
+  },
 ];
 
 export const DEFAULT_PLAYER_SOURCE_NAME = 'Vidrift';

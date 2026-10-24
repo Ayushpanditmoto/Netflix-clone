@@ -10,6 +10,7 @@ import { QUERY_KEYS } from '@/lib/queryKeys';
 import { fetchEpisodes, fetchMovieById, fetchSeasons, fetchSimilarMovies, movieYear, tmdbImageUrl } from '@/lib/tmdb';
 import type { Episode } from '@/types/tmdb';
 import MovieTile from '@/components/MovieTile';
+import Navbar from '@/components/Navbar';
 import { saveWatchHistory } from '@/lib/watchHistory';
 
 export default function WatchPage() {
@@ -118,10 +119,11 @@ export default function WatchPage() {
 
   return (
     <main className="watch-page">
+      <Navbar />
       <div className="watch-shell">
         <div className="watch-topbar">
           <button className="watch-back" type="button" onClick={() => router.back()} aria-label="Go back">
-            <BackIcon /> Back
+            <BackIcon />
           </button>
           <div className="watch-context" aria-live="polite">
             <strong>{movie.title}</strong>

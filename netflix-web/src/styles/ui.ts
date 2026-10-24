@@ -289,7 +289,7 @@ export const UIStyle = createGlobalStyle`
   .watch-page { min-height: 100vh; padding: 5rem 4% 3rem; background: ${({ theme }) => theme.colors.background}; animation: page-rise 360ms ${({ theme }) => theme.motion.entrance} both; }
   @keyframes page-rise { from { opacity: 0; transform: translateY(.5rem); } to { opacity: 1; transform: translateY(0); } }
   .watch-shell { width: min(100%, 75rem); margin: 0 auto; }
-  .watch-topbar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; padding-bottom: .75rem; border-bottom: 1px solid ${({ theme }) => theme.colors.border}; }
+  .watch-topbar { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; padding-bottom: .5rem; border-bottom: 1px solid ${({ theme }) => theme.colors.border}; }
   .watch-context { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: .15rem; }
   .watch-context strong { overflow: hidden; color: ${({ theme }) => theme.colors.text}; font-size: .9rem; text-overflow: ellipsis; white-space: nowrap; }
   .watch-context span { color: ${({ theme }) => theme.colors.textMuted}; font-size: .7rem; }

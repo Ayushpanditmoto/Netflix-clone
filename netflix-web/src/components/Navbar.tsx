@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/store';
 
 export default function Navbar() {
+  const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const { activeTab, setActiveTab, searchQuery, setSearchQuery } = useUIStore();
 
@@ -34,7 +36,7 @@ export default function Navbar() {
     <nav className={`navbar ${scrolled ? 'scrolled' : ''}`} aria-label="Main navigation">
       <span
         className="navbar-logo"
-        onClick={() => setActiveTab('home')}
+        onClick={() => { setActiveTab('home'); router.push('/'); }}
         role="button"
         tabIndex={0}
         aria-label="Go to home"
@@ -50,7 +52,7 @@ export default function Navbar() {
           <li
             key={tab}
             className={activeTab === tab ? 'active' : ''}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => { setActiveTab(tab); router.push(tab === 'home' ? '/' : `/?tab=${tab}`); }}
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
@@ -90,7 +92,7 @@ export default function Navbar() {
         <button
           id="navbar-search-btn"
           className="navbar-search-icon"
-          onClick={() => setActiveTab('search')}
+          onClick={() => { setActiveTab('search'); router.push('/?tab=search'); }}
           aria-label="Open search"
         >
           <SearchIcon />

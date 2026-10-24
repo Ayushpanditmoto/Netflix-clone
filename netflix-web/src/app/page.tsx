@@ -1,7 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { QUERY_KEYS } from '@/lib/queryKeys';
 import { fetchHomeSections } from '@/lib/tmdb';
 import { useUIStore, useSectionStore } from '@/store';
@@ -14,8 +15,13 @@ import PlayerModal from '@/components/PlayerModal';
 import HomeSkeleton from '@/components/HomeSkeleton';
 import ContinueWatching from '@/components/ContinueWatching';
 
-export default function HomePage() {
-  const { activeTab } = useUIStore();
+function HomePageInner() {
+  const searchParams = useSearchParams();
+  const { activeTab, setActiveTab } = useUIStore();
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'search' || tab === 'trending' || tab === 'home') setActiveTab(tab);
+  }, [searchParams, setActiveTab]);
   const { sections, setSections } = useSectionStore();
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -101,5 +107,14 @@ export default function HomePage() {
       <DetailModal />
       <PlayerModal />
     </div>
+  );
+}
+
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={null}>
+      <HomePageInner />
+    </Suspense>
   );
 }

@@ -374,8 +374,8 @@ export const UIStyle = createGlobalStyle`
     .watch-details { grid-template-columns: 1fr; gap: 1.25rem; padding-top: 1.25rem; }
     .watch-player-wrap { border-radius: ${({ theme }) => theme.radii.medium}; }
     .watch-recommendation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
-    .watch-topbar { align-items: stretch; flex-direction: column; }
-    .watch-topbar-source { width: 100%; max-width: none; }
+    .watch-topbar { align-items: center; flex-direction: row; flex-wrap: wrap; }
+    .watch-topbar-source { width: auto; max-width: 100%; }
     .watch-topbar-source .watch-source-select { min-width: 0; }
     .watch-source-select-wrap { align-items: stretch; flex-direction: column; gap: .4rem; }
     .watch-episodes { grid-template-columns: 1fr; }

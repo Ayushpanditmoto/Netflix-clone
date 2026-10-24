@@ -48,7 +48,7 @@ function MovieTile({ movie, onClick, showTitle = false, animationIndex = 0 }: Mo
     if (!canPreview) return;
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setPreviewRect(tileRef.current?.getBoundingClientRect() ?? null);
-    closeTimer.current = setTimeout(() => setActivePreview(previewKey), 1000);
+    closeTimer.current = setTimeout(() => setActivePreview(previewKey), 350);
   };
 
   const closePreview = () => {
@@ -152,6 +152,7 @@ function MovieTile({ movie, onClick, showTitle = false, animationIndex = 0 }: Mo
           }}
           onMouseLeave={closePreview}
           onPlay={openWatchPage}
+          onInfo={() => openMovie(movie)}
         />,
         document.body
       )}
@@ -175,9 +176,10 @@ interface TrailerPreviewProps {
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onPlay: () => void;
+  onInfo: () => void;
 }
 
-function TrailerPreview({ movie, backdrop, trailerKey, loading, position, onMouseEnter, onMouseLeave, onPlay }: TrailerPreviewProps) {
+function TrailerPreview({ movie, backdrop, trailerKey, loading, position, onMouseEnter, onMouseLeave, onPlay, onInfo }: TrailerPreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [muted, setMuted] = useState(true);
   const width = Math.min(280, window.innerWidth - 24);
@@ -227,13 +229,34 @@ function TrailerPreview({ movie, backdrop, trailerKey, loading, position, onMous
           </button>
         )}
       </div>
-      <button type="button" className="trailer-preview-play" onClick={onPlay} aria-label={`Watch ${movie.title}`}><PlayIcon /></button>
+      <div className="trailer-preview-actions">
+        <button type="button" className="trailer-preview-play" onClick={onPlay} aria-label={`Watch ${movie.title}`}><PlayIcon /></button>
+        <button type="button" className="trailer-preview-icon" aria-label="Add to My List"><PlusIcon /></button>
+        <button type="button" className="trailer-preview-icon" aria-label="Like"><ThumbIcon /></button>
+        <button type="button" className="trailer-preview-info" onClick={onInfo} aria-label={`More info about ${movie.title}`}>
+          <ChevronIcon />
+        </button>
+      </div>
+      <div className="trailer-preview-meta">
+        <span className="trailer-preview-match">{Math.round(movie.voteAverage * 10)}% Match</span>
+        <span>{movie.releaseDate?.slice(0, 4) || 'New'}</span>
+        <span className="trailer-preview-badge">HD</span>
+      </div>
     </div>
   );
 }
 
 function PlayIcon() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>;
+}
+function PlusIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>;
+}
+function ThumbIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 10v11M15 21H8a2 2 0 0 1-2-2v-9l5-7 1 1v6h6a2 2 0 0 1 2 2l-2 7a2 2 0 0 1-2 2z" /></svg>;
+}
+function ChevronIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>;
 }
 
 function MutedIcon() {

@@ -15,15 +15,20 @@ export default function Navbar() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement;
       if (target.matches('input, textarea, select, [contenteditable="true"]')) return;
-      event.preventDefault();
-      setActiveTab('search');
+      if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        setActiveTab('search');
+        setSearchQuery(event.key);
+      } else if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        setActiveTab('search');
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [setActiveTab]);
+  }, [setActiveTab, setSearchQuery]);
 
   return (
     <nav className={`navbar ${scrolled ? 'scrolled' : ''}`} aria-label="Main navigation">

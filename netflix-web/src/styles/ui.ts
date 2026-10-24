@@ -382,8 +382,21 @@ export const UIStyle = createGlobalStyle`
     .watch-episode-art { width: 6.5rem; }
     .movie-tile:hover, .movie-tile-preview-active { transform: none; box-shadow: none; }
   }
-  @media (min-width: 48rem) and (max-width: 63.99rem) {
-    .trailer-preview-copy p { -webkit-line-clamp: 2; }
-    .watch-episodes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 47.99rem) {
+    .section-rail { margin-bottom: 1.25rem; }
+    .rail-scroll { gap: .6rem; padding: .35rem 4% .75rem; }
+    .movie-tile { flex: 0 0 clamp(9.5rem, 34vw, 11.5rem); }
+    .rail-arrow { display: none; }
+    .section-title { font-size: 1rem; }
+    .section-subtitle { margin-top: .15rem; }
+    .continue-item { flex: 0 0 clamp(8rem, 32vw, 10rem); }
+    .continue-episode { font-size: .55rem; }
+    .movie-tile-overlay { opacity: 0; }
+    .movie-tile-play { width: 1.75rem; height: 1.75rem; }
+    .movie-tile-info { width: 1.75rem; height: 1.75rem; }
+  }
+  @media (max-width: 26.5rem) {
+    .movie-tile { flex: 0 0 10rem; }
+    .continue-item { flex: 0 0 8.5rem; }
   }
 `;

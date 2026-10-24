@@ -4,9 +4,9 @@ import Image from 'next/image';
 import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { memo, useEffect, useId, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Movie } from '@/types/tmdb';
-import { backdropUrl, fetchTrailerKey, posterUrl } from '@/lib/tmdb';
+import { backdropUrl, fetchTrailerKey, posterUrl, fetchMovieById } from '@/lib/tmdb';
 import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/store';
 import { QUERY_KEYS } from '@/lib/queryKeys';
@@ -30,6 +30,7 @@ function MovieTile({ movie, onClick, showTitle = false, animationIndex = 0 }: Mo
   const tileRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [previewRect, setPreviewRect] = useState<DOMRect | null>(null);
+  const queryClient = useQueryClient();
   const canPreview = isPreviewAllowed();
 
   const trailerQuery = useQuery({
@@ -48,7 +49,13 @@ function MovieTile({ movie, onClick, showTitle = false, animationIndex = 0 }: Mo
     if (!canPreview) return;
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setPreviewRect(tileRef.current?.getBoundingClientRect() ?? null);
-    closeTimer.current = setTimeout(() => setActivePreview(previewKey), 350);
+    closeTimer.current = setTimeout(() => setActivePreview(previewKey), 1000);
+    // Prefetch movie data to speed up navigation when clicked.
+    queryClient.prefetchQuery({
+      queryKey: QUERY_KEYS.movie(movie.id, movie.mediaType),
+      queryFn: () => fetchMovieById(movie.id, movie.mediaType),
+      staleTime: 10 * 60 * 1000,
+    });
   };
 
   const closePreview = () => {

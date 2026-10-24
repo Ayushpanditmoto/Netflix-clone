@@ -50,12 +50,15 @@ function MovieTile({ movie, onClick, showTitle = false, animationIndex = 0 }: Mo
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setPreviewRect(tileRef.current?.getBoundingClientRect() ?? null);
     closeTimer.current = setTimeout(() => setActivePreview(previewKey), 1000);
-    // Prefetch movie data to speed up navigation when clicked.
+  };
+
+  const handleMouseEnter = () => {
     queryClient.prefetchQuery({
       queryKey: QUERY_KEYS.movie(movie.id, movie.mediaType),
       queryFn: () => fetchMovieById(movie.id, movie.mediaType),
       staleTime: 10 * 60 * 1000,
     });
+    openPreview();
   };
 
   const closePreview = () => {
@@ -77,6 +80,11 @@ function MovieTile({ movie, onClick, showTitle = false, animationIndex = 0 }: Mo
   }, [activePreviewKey, previewKey]);
 
   const openWatchPage = () => {
+    queryClient.prefetchQuery({
+      queryKey: QUERY_KEYS.movie(movie.id, movie.mediaType),
+      queryFn: () => fetchMovieById(movie.id, movie.mediaType),
+      staleTime: 10 * 60 * 1000,
+    });
     saveWatchHistory(movie);
     window.dispatchEvent(new Event('watch-history-updated'));
     onClick?.();
@@ -89,7 +97,7 @@ function MovieTile({ movie, onClick, showTitle = false, animationIndex = 0 }: Mo
       id={`tile-${movie.mediaType}-${movie.id}`}
       className={`movie-tile ${showTitle ? 'movie-tile-with-title' : 'movie-tile-poster-only'} ${activePreviewKey === previewKey ? 'movie-tile-preview-active' : ''}`}
       style={{ '--card-index': Math.min(animationIndex, 11) } as CSSProperties}
-      onMouseEnter={openPreview}
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={closePreview}
     >
       <div

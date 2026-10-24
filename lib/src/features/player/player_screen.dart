@@ -49,6 +49,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   bool get _isEpisode => _season != null && _episode != null;
 
+  /// Viewports shorter than this behave like the mini player: video fills the
+  /// space, no info list. Prevents RenderFlex overflow on landscape,
+  /// split-screen, and other short screens.
+  static const double _minHeightForInfoList = 280;
+
   void _select(PlayerSource source) {
     setState(() => _selected = source);
   }
@@ -108,185 +113,199 @@ class _PlayerScreenState extends State<PlayerScreen> {
       backgroundColor: const Color(0xFF090909),
       body: SafeArea(
         bottom: false,
-        child: Column(
-          children: [
-            SizedBox(height: widget.isMini ? 0 : 28),
-            Stack(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Treat short viewports as mini: video fills, no info list.
+            final effectiveMini =
+                widget.isMini || constraints.maxHeight < _minHeightForInfoList;
+
+            return Column(
               children: [
-                GestureDetector(
-                  onVerticalDragUpdate: widget.isMini
-                      ? null
-                      : (details) {
-                          if (details.delta.dy > 0) {
-                            _videoDragDistance += details.delta.dy;
-                          }
-                        },
-                  onVerticalDragEnd: widget.isMini
-                      ? null
-                      : (_) {
-                          if (_videoDragDistance >= 56) {
-                            _videoDragDistance = 0;
-                            widget.onMinimize?.call();
-                          } else {
-                            _videoDragDistance = 0;
-                          }
-                        },
-                  onTap: widget.isMini ? widget.onExpand : null,
-                  child: _InlinePlayer(
-                    selected: _selected,
-                    season: _season,
-                    episode: _episode,
-                    url: _urlFor(_selected),
-                  ),
-                ),
-              ],
-            ),
-            if (!widget.isMini)
-              Expanded(
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (notification) {
-                    if (notification is OverscrollNotification &&
-                        notification.metrics.pixels <= 0 &&
-                        notification.overscroll < 0) {
-                      _pullDownDistance += -notification.overscroll;
-                      if (_pullDownDistance >= 80) {
-                        _closeAfterSwipe();
-                      }
-                    } else if (notification is ScrollEndNotification) {
-                      _pullDownDistance = 0;
-                    }
-                    return false;
-                  },
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(0, 16, 0, 32),
+                SizedBox(height: effectiveMini ? 0 : 28),
+                // Flexible so the video stage participates in shrinking;
+                // otherwise the Expanded info list collapses to 0 and the
+                // fixed-header + fixed-video stack overflows.
+                Flexible(
+                  child: Stack(
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.movie.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 26,
-                                height: 1.15,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            _MetaRow(movie: widget.movie),
-                            const SizedBox(height: 18),
-
-                            // ── 1. Episode and source controls ─────────────────────
-                            if (_isEpisode)
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Expanded(
-                                    child: _EpisodeChip(
-                                      season: _season!,
-                                      episode: _episode!,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    flex: 2,
-                                    child: _SourceSelectorBar(
-                                      selected: _selected,
-                                      totalSources: playerSources.length,
-                                      onTap: _showSourcePicker,
-                                      compact: true,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            else
-                              _SourceSelectorBar(
-                                selected: _selected,
-                                totalSources: playerSources.length,
-                                onTap: _showSourcePicker,
-                              ),
-                            if (widget.movie.overview.isNotEmpty) ...[
-                              const SizedBox(height: 18),
-                              Text(
-                                widget.movie.overview,
-                                maxLines: 4,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  height: 1.45,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 24),
-
-                            // ── 2. Episodes (TV series only) ───────────────────────
-                            if (widget.movie.mediaType == 'tv') ...[
-                              Row(
-                                children: [
-                                  const Text(
-                                    'Episodes',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  if (_isEpisode)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFE50914)
-                                            .withValues(alpha: 0.14),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                          color: const Color(0xFFE50914)
-                                              .withValues(alpha: 0.45),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'Playing · S$_season E$_episode',
-                                        style: const TextStyle(
-                                          color: Color(0xFFE50914),
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              EpisodeList(
-                                movie: widget.movie,
-                                onEpisodeTap: _playEpisode,
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-
-                            // ── Disclaimer ─────────────────────────────────────────
-                            Text(
-                              '⚠️ Educational demo only. Sources are third-party embeds not operated by this project.',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.white.withValues(alpha: 0.28),
-                                height: 1.6,
-                              ),
-                            ),
-                          ],
+                      GestureDetector(
+                        onVerticalDragUpdate: effectiveMini
+                            ? null
+                            : (details) {
+                                if (details.delta.dy > 0) {
+                                  _videoDragDistance += details.delta.dy;
+                                }
+                              },
+                        onVerticalDragEnd: effectiveMini
+                            ? null
+                            : (_) {
+                                if (_videoDragDistance >= 56) {
+                                  _videoDragDistance = 0;
+                                  widget.onMinimize?.call();
+                                } else {
+                                  _videoDragDistance = 0;
+                                }
+                              },
+                        onTap: effectiveMini ? widget.onExpand : null,
+                        child: _InlinePlayer(
+                          selected: _selected,
+                          season: _season,
+                          episode: _episode,
+                          url: _urlFor(_selected),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-          ],
+                if (!effectiveMini)
+                  Expanded(
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification is OverscrollNotification &&
+                            notification.metrics.pixels <= 0 &&
+                            notification.overscroll < 0) {
+                          _pullDownDistance += -notification.overscroll;
+                          if (_pullDownDistance >= 80) {
+                            _closeAfterSwipe();
+                          }
+                        } else if (notification is ScrollEndNotification) {
+                          _pullDownDistance = 0;
+                        }
+                        return false;
+                      },
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(0, 16, 0, 32),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.movie.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 26,
+                                    height: 1.15,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                _MetaRow(movie: widget.movie),
+                                const SizedBox(height: 18),
+
+                                // ── 1. Episode and source controls ───────────────
+                                if (_isEpisode)
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        child: _EpisodeChip(
+                                          season: _season!,
+                                          episode: _episode!,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        flex: 2,
+                                        child: _SourceSelectorBar(
+                                          selected: _selected,
+                                          totalSources: playerSources.length,
+                                          onTap: _showSourcePicker,
+                                          compact: true,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                else
+                                  _SourceSelectorBar(
+                                    selected: _selected,
+                                    totalSources: playerSources.length,
+                                    onTap: _showSourcePicker,
+                                  ),
+                                if (widget.movie.overview.isNotEmpty) ...[
+                                  const SizedBox(height: 18),
+                                  Text(
+                                    widget.movie.overview,
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      height: 1.45,
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 24),
+
+                                // ── 2. Episodes (TV series only) ───────────────
+                                if (widget.movie.mediaType == 'tv') ...[
+                                  Row(
+                                    children: [
+                                      const Text(
+                                        'Episodes',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      if (_isEpisode)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFE50914)
+                                                .withValues(alpha: 0.14),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: const Color(0xFFE50914)
+                                                  .withValues(alpha: 0.45),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Playing · S$_season E$_episode',
+                                            style: const TextStyle(
+                                              color: Color(0xFFE50914),
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  EpisodeList(
+                                    movie: widget.movie,
+                                    onEpisodeTap: _playEpisode,
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
+
+                                // ── Disclaimer ─────────────────────────────────
+                                Text(
+                                  '⚠️ Educational demo only. Sources are third-party embeds not operated by this project.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white.withValues(alpha: 0.28),
+                                    height: 1.6,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -626,37 +645,38 @@ class _InlinePlayer extends StatelessWidget {
     final target = url;
     final maxVideoHeight = MediaQuery.sizeOf(context).height * 0.45;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final naturalHeight = constraints.maxWidth * 9 / 16;
-            final videoHeight = naturalHeight > maxVideoHeight
-                ? maxVideoHeight
-                : naturalHeight;
-            return SizedBox(
-              width: double.infinity,
-              height: videoHeight,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(color: Colors.black),
-                  child: target == null
-                      ? const _PlayerPlaceholder()
-                      : EmbedPlayerView(
-                          key: ValueKey(
-                            'embed-${source!.name}-$season-$episode',
-                          ),
-                          url: target,
-                          requiresIframe: source.requiresIframe,
-                        ),
-                ),
-              ),
-            );
-          },
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final naturalHeight = constraints.maxWidth * 9 / 16;
+        // Respect the height ceiling imposed by the parent (e.g. Flexible),
+        // so short viewports shrink the video instead of overflowing.
+        final parentCeiling = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : double.infinity;
+        final videoHeight = [
+          naturalHeight,
+          maxVideoHeight,
+          parentCeiling,
+        ].reduce((a, b) => a < b ? a : b);
+
+        return SizedBox(
+          width: double.infinity,
+          height: videoHeight,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: DecoratedBox(
+              decoration: const BoxDecoration(color: Colors.black),
+              child: target == null
+                  ? const _PlayerPlaceholder()
+                  : EmbedPlayerView(
+                      key: ValueKey('embed-${source!.name}-$season-$episode'),
+                      url: target,
+                      requiresIframe: source.requiresIframe,
+                    ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -30,15 +30,11 @@ class _EpisodeListState extends ConsumerState<EpisodeList> {
   /// season list arrives.
   int? _selected;
 
-  /// Created lazily because the initial page depends on which season is
-  /// selected by default, which is only known once the seasons load.
-  PageController? _pageController;
   final _tabsScrollController = ScrollController();
   final _tabKeys = <int, GlobalKey>{};
 
   @override
   void dispose() {
-    _pageController?.dispose();
     _tabsScrollController.dispose();
     super.dispose();
   }
@@ -65,7 +61,8 @@ class _EpisodeListState extends ConsumerState<EpisodeList> {
     return index == -1 ? _defaultIndex(seasons) : index;
   }
 
-  void _onPageChanged(int index, List<Season> seasons) {
+  void _selectIndex(int index, List<Season> seasons) {
+    if (index < 0 || index >= seasons.length) return;
     setState(() => _selected = seasons[index].number);
     _revealTab(index, seasons);
   }
@@ -81,6 +78,18 @@ class _EpisodeListState extends ConsumerState<EpisodeList> {
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
     );
+  }
+
+  /// Handles a horizontal swipe on the episode list: advance one season in
+  /// the direction of the fling.
+  void _onHorizontalSwipe(DragEndDetails details, int index,
+      List<Season> seasons) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity < -200) {
+      _selectIndex(index + 1, seasons);
+    } else if (velocity > 200) {
+      _selectIndex(index - 1, seasons);
+    }
   }
 
   @override
@@ -110,33 +119,29 @@ class _EpisodeListState extends ConsumerState<EpisodeList> {
         }
         final index = _resolveIndex(list);
         final seasonNumber = list[index].number;
-        _pageController ??= PageController(initialPage: index);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             _SeasonTabs(
               seasons: list,
               selectedIndex: index,
               scrollController: _tabsScrollController,
               tabKeyFor: _tabKey,
-              onSelected: (next) {
-                _pageController?.animateToPage(
-                  next,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOut,
-                );
-              },
+              onSelected: (next) => _selectIndex(next, list),
             ),
             const SizedBox(height: 14),
-            _SeasonPages(
-              seriesId: widget.movie.id,
-              seasons: list,
-              initialIndex: index,
-              controller: _pageController!,
-              onPageChanged: (next) => _onPageChanged(next, list),
-              currentSeasonNumber: seasonNumber,
-              onEpisodeTap: widget.onEpisodeTap,
+            // Sizes to its content; no fixed height, so no overflow.
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragEnd: (details) =>
+                  _onHorizontalSwipe(details, index, list),
+              child: _Episodes(
+                seriesId: widget.movie.id,
+                season: seasonNumber,
+                onEpisodeTap: widget.onEpisodeTap,
+              ),
             ),
           ],
         );
@@ -145,8 +150,8 @@ class _EpisodeListState extends ConsumerState<EpisodeList> {
   }
 }
 
-/// Season tabs that mirror the swipeable pages below them. Tapping a tab
-/// animates the pager; swiping the pager moves the selection here.
+/// Season tabs that mirror the selected season below them. Tapping a tab
+/// selects that season; swiping the episode list advances the selection.
 class _SeasonTabs extends StatelessWidget {
   const _SeasonTabs({
     required this.seasons,
@@ -195,66 +200,6 @@ class _SeasonTabs extends StatelessWidget {
   }
 }
 
-/// One swipeable page per season.
-///
-/// The height is driven by the current page content so episode rows remain
-/// part of the parent page's scroll instead of creating a nested scroll area.
-class _SeasonPages extends ConsumerWidget {
-  const _SeasonPages({
-    required this.seriesId,
-    required this.seasons,
-    required this.initialIndex,
-    required this.controller,
-    required this.onPageChanged,
-    required this.currentSeasonNumber,
-    this.onEpisodeTap,
-  });
-
-  final int seriesId;
-  final List<Season> seasons;
-  final int initialIndex;
-  final PageController controller;
-  final ValueChanged<int> onPageChanged;
-  final void Function(int season, int episode)? onEpisodeTap;
-
-  /// The season currently on screen, used to size the viewport to its content.
-  final int currentSeasonNumber;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final current = episodesProvider((
-      seriesId: seriesId,
-      seasonNumber: currentSeasonNumber,
-    ));
-    final height = _heightFor(ref.watch(current));
-
-    return SizedBox(
-      height: height,
-      child: PageView.builder(
-        controller: controller,
-        onPageChanged: onPageChanged,
-        itemCount: seasons.length,
-        itemBuilder: (context, index) => _Episodes(
-          seriesId: seriesId,
-          season: seasons[index].number,
-          onEpisodeTap: onEpisodeTap,
-        ),
-      ),
-    );
-  }
-
-  /// One row per episode so the parent player page owns vertical scrolling.
-  double _heightFor(AsyncValue<List<Episode>> episodes) {
-    return episodes.when(
-      loading: () => _rowHeight * 3,
-      error: (error, stackTrace) => 72,
-      data: (list) => list.isEmpty ? 72 : _rowHeight * list.length,
-    );
-  }
-}
-
-const double _rowHeight = 104;
-
 class _Episodes extends ConsumerWidget {
   const _Episodes({
     required this.seriesId,
@@ -276,6 +221,7 @@ class _Episodes extends ConsumerWidget {
 
     return episodes.when(
       loading: () => Column(
+        mainAxisSize: MainAxisSize.min,
         children: List.generate(
           3,
           (index) => const Padding(
@@ -285,6 +231,7 @@ class _Episodes extends ConsumerWidget {
         ),
       ),
       error: (error, stackTrace) => Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           TextButton.icon(
             onPressed: () => ref.invalidate(provider),
@@ -301,6 +248,7 @@ class _Episodes extends ConsumerWidget {
           );
         }
         return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             for (var index = 0; index < list.length; index++) ...[
               _EpisodeRow(
